@@ -36,7 +36,7 @@ except FileNotFoundError:
 
 # reset the logging level from DEBUG by default
 logger.remove()
-logger.add(sys.stderr, level=settings["logging_level"] if in_addon else "DEBUG")
+logger.add(sys.stderr, level=settings["LOGGING_LEVEL"] if in_addon else "DEBUG")
 
 STATION_ID = settings.get("WEATHER_STATION_ID")
 

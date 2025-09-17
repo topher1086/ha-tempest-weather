@@ -1,6 +1,6 @@
 name: "Tempest Weather Scraper"
 description: "Scrapes weather data from Tempest webpage"
-version: "1.0.0"
+version: "1.0.1"
 slug: "tempest_weather_scraper"
 init: false
 arch:
@@ -15,12 +15,12 @@ options:
   MQTT_PORT: 1883
   MQTT_USER: null
   MQTT_PASS: null
-  logging_level: INFO
+  LOGGING_LEVEL: INFO
 schema:
   WEATHER_STATION_ID: str
   MQTT_HOST: str
   MQTT_PORT: int
   MQTT_USER: str | None
   MQTT_PASS: str | None
-  logging_level: list(DEBUG|INFO|WARN|ERROR|CRITICAL)
+  LOGGING_LEVEL: list(DEBUG|INFO|WARN|ERROR|CRITICAL)
 homeassistant_api: false
