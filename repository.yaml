@@ -1,0 +1,4 @@
+# https://developers.home-assistant.io/docs/add-ons/repository#repository-configuration
+name: Chris's Home Assistant Tempest Addon
+url: "https://github.com/topher1086/ha-tempest-weather"
+maintainer: Chris Christensen
