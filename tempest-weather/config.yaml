@@ -21,7 +21,7 @@ schema:
   WEATHER_STATION_ID: str
   MQTT_HOST: str
   MQTT_PORT: int
-  MQTT_USER: str | None
-  MQTT_PASS: str | None
+  MQTT_USER: str
+  MQTT_PASS: str
   LOGGING_LEVEL: list(DEBUG|INFO|WARN|ERROR|CRITICAL)
 homeassistant_api: false
