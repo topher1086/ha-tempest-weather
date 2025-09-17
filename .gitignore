@@ -162,5 +162,5 @@ cython_debug/
 test_config.yaml
 data/
 
-chrome-headless-shell-linux64/*
-chromedriver-linux64/
+chromedriver-linux64*
+chrome-headless-shell-linux64*
