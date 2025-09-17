@@ -187,6 +187,8 @@ class MQTTPublisher:
         """
         self.update_count += 1
         force = self.update_count % 60 == 0
+        if force:
+            logger.info("Forcing MQTT publish for all sensors.")
         for k, v in weather_data.items():
             logger.info(f"{k.capitalize()}: {v}")
             self.publish_sensor(k, v, force=force)
