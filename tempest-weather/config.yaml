@@ -1,7 +1,8 @@
 name: "Tempest Weather Scraper"
 description: "Scrapes weather data from Tempest webpage"
-version: "1.0.1"
+version: "1.0.2"
 slug: "tempest_weather_scraper"
+url: "https://github.com/topher1086/ha-tempest-weather"
 init: false
 arch:
   - aarch64
