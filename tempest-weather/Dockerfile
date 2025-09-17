@@ -17,19 +17,6 @@ ENV VIRTUAL_ENV=/.venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-
-
-# Install Chromium and ChromiumDriver for Selenium
-RUN apk add --no-cache \
-    chromium \
-    chromium-chromedriver \
-    nss \
-    freetype \
-    harfbuzz \
-    ttf-freefont
-ENV CHROME_BIN=/usr/bin/chromium-browser
-ENV CHROMEDRIVER_BIN=/usr/bin/chromedriver
-
 RUN pip3 install -r requirements.txt
 
 CMD ["./run.sh"]

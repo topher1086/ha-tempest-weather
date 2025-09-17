@@ -1,7 +1,7 @@
-name: "Spotify Repeat Skipper"
-description: "Spotify Skipper Addon"
-version: "2.0.7"
-slug: "spotify_track_skipper"
+name: "Tempest Weather Scraper"
+description: "Scrapes weather data from Tempest webpage"
+version: "1.0.0"
+slug: "tempest_weather_scraper"
 init: false
 arch:
   - aarch64
@@ -10,13 +10,9 @@ arch:
   - armv7
   - i386
 options:
-  spotify_media_players: null
-  skip_enabled_helpers: null
-  block_for_x_hours: 30
+  weather_station_id: null
   logging_level: INFO
 schema:
-  spotify_media_players: str
-  skip_enabled_helpers: str
-  block_for_x_hours: int(1,300)
+  weather_station_id: str
   logging_level: list(DEBUG|INFO|WARN|ERROR|CRITICAL)
 homeassistant_api: true
