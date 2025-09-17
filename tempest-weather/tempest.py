@@ -195,7 +195,7 @@ class MQTTPublisher:
             logger.info("Disconnected from MQTT broker.")
 
 
-def main() -> None:  # noqa: C901
+def main() -> None:  # noqa: C901, PLR0915
     """Scrapes weather data from a Tempest Weather station web page using Selenium and headless Chrome."""
 
     def safe_text(selector: str) -> str | None:
@@ -279,7 +279,7 @@ def main() -> None:  # noqa: C901
                         if k == "wind_gusts":
                             n_val = new_val.replace(" mph", "").strip().replace(" ", "")
                             splits = n_val.split("-")
-                            low_val = splits[0] if len(splits) > 1 else splits[0]
+                            low_val = splits[0]
                             high_val = splits[1] if len(splits) > 1 else splits[0]
 
                             weather_data["wind_gust_low"] = low_val
