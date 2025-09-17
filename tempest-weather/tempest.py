@@ -89,6 +89,7 @@ class MQTTPublisher:
         self.client: mqtt.Client | None = None
         self.last_values: dict[str, str | None] = {}
         self.sensors_configured: set[str] = set()
+        self.update_count: int = 0
         self.sensor_meta: dict[str, dict[str, str]] = {
             "temperature": {"unit": "°F", "device_class": "temperature"},
             "humidity": {"unit": "%", "device_class": "humidity"},
@@ -129,18 +130,19 @@ class MQTTPublisher:
             logger.warning(f"Could not connect to MQTT broker: {e}")
             self.client = None
 
-    def publish_sensor(self, sensor: str, value: str | None) -> None:
+    def publish_sensor(self, sensor: str, value: str | None, force: bool = False) -> None:  # noqa: FBT001, FBT002
         """Publish a single sensor value to MQTT if it has changed since the last publish.
 
         Args:
             sensor (str): The sensor name.
             value (str | None): The sensor value.
+            force (bool): Whether to force publish the value.
 
         """
         if not self.client:
             return
         # Only publish if value changed
-        if self.last_values.get(sensor) == value:
+        if self.last_values.get(sensor) == value and not force:
             return
         self.last_values[sensor] = value
         object_id = f"tempest_{sensor}"
@@ -183,9 +185,11 @@ class MQTTPublisher:
             weather_data (dict): Dictionary of sensor names to values.
 
         """
+        self.update_count += 1
+        force = self.update_count % 60 == 0
         for k, v in weather_data.items():
             logger.info(f"{k.capitalize()}: {v}")
-            self.publish_sensor(k, v)
+            self.publish_sensor(k, v, force=force)
 
     def disconnect(self) -> None:
         """Disconnect from the MQTT broker and stop the client loop."""
