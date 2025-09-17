@@ -10,9 +10,17 @@ arch:
   - armv7
   - i386
 options:
-  weather_station_id: null
+  WEATHER_STATION_ID: null
+  MQTT_HOST: "supervisor"
+  MQTT_PORT: 1883
+  MQTT_USER: null
+  MQTT_PASS: null
   logging_level: INFO
 schema:
-  weather_station_id: str
+  WEATHER_STATION_ID: str
+  MQTT_HOST: str
+  MQTT_PORT: int
+  MQTT_USER: str | None
+  MQTT_PASS: str | None
   logging_level: list(DEBUG|INFO|WARN|ERROR|CRITICAL)
-homeassistant_api: true
+homeassistant_api: false

@@ -3,7 +3,6 @@ from __future__ import annotations  # noqa: D100
 import json
 import sys
 import time
-from os import environ
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
@@ -39,12 +38,6 @@ except FileNotFoundError:
 logger.remove()
 logger.add(sys.stderr, level=settings["logging_level"] if in_addon else "DEBUG")
 
-base_url = "http://supervisor/core/api" if in_addon else test_config.get("base_url")
-
-logger.debug(f"Base URL: {base_url}")
-
-token = environ.get("SUPERVISOR_TOKEN") if in_addon else test_config.get("token")
-
 STATION_ID = settings.get("WEATHER_STATION_ID")
 
 
@@ -54,7 +47,7 @@ MQTT_PORT = settings.get("MQTT_PORT", 1883)
 MQTT_USER = settings.get("MQTT_USER")
 MQTT_PASS = settings.get("MQTT_PASS")
 MQTT_CLIENT_ID = f"tempest_{STATION_ID}"
-MQTT_BASE = settings.get("MQTT_BASE", "homeassistant")
+MQTT_BASE = "homeassistant"
 
 
 # --- MQTT Publisher Class ---
