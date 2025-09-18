@@ -1,6 +1,6 @@
 name: "Tempest Weather Scraper"
 description: "Scrapes weather data from Tempest webpage"
-version: "1.0.18"
+version: "1.0.19"
 slug: "tempest_weather_scraper"
 url: "https://github.com/topher1086/ha-tempest-weather"
 init: false
@@ -22,6 +22,6 @@ schema:
   MQTT_HOST: str
   MQTT_PORT: int
   MQTT_USER: str
-  MQTT_PASS: str
+  MQTT_PASS: password
   LOGGING_LEVEL: list(DEBUG|INFO|WARN|ERROR|CRITICAL)
 homeassistant_api: false
