@@ -234,9 +234,9 @@ def main() -> None:  # noqa: C901, PLR0915
     # time.sleep(600)
 
     url = f"https://tempestwx.com/station/{STATION_ID}"
-    service = ChromeService("/chromedriver-linux64/chromedriver")
+    service = ChromeService("/usr/bin/chromedriver")
     chrome_options = webdriver.ChromeOptions()
-    chrome_options.binary_location = "/chrome-headless-shell-linux64/chrome-headless-shell"
+    # chrome_options.binary_location = "/chrome-headless-shell-linux64/chrome-headless-shell"
     chrome_options.add_argument("--headless")
     chrome_options.add_argument(
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
