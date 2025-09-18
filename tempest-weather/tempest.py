@@ -61,6 +61,15 @@ try:
 except FileNotFoundError:
     print(f"Error: The directory '{current_path}' was not found.")
 
+dirs_to_list = ["./chromedriver-linux64", "./chrome-headless-shell-linux64"]
+for directory in dirs_to_list:
+    print(f"Listing for: {os.path.abspath(directory)}\n")
+    try:
+        print("\n".join(os.listdir(directory)))
+    except FileNotFoundError:
+        print(f"Error: The directory '{directory}' was not found.")
+    print("-" * 20)
+
 
 # --- MQTT Publisher Class ---
 class MQTTPublisher:
