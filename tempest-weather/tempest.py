@@ -127,7 +127,7 @@ class MQTTPublisher:
             "wind_gust_high": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy", "suggested_display_precision": 0},
             "wind_direction": {"unit": "°", "icon": "mdi:compass"},
             "wind_direction_cardinal": {"icon": "mdi:compass-outline"},
-            "uv": {"device_class": "uv_index", "icon": "mdi:weather-sunny-alert"},
+            "uv": {"icon": "mdi:weather-sunny-alert"},
             "precipitation": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy"},
             "precipitation_today": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy", "suggested_display_precision": 2},
             "precipitation_yesterday": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy", "suggested_display_precision": 2},
