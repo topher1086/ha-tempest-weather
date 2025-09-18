@@ -32,7 +32,6 @@ try:
         settings.update(test_config)
 except FileNotFoundError:
     test_config = {}
-    test_config = {}
 
 # reset the logging level from DEBUG by default
 logger.remove()
@@ -48,6 +47,19 @@ MQTT_USER = settings.get("MQTT_USER")
 MQTT_PASS = settings.get("MQTT_PASS")
 MQTT_CLIENT_ID = f"tempest_{STATION_ID}"
 MQTT_BASE = "homeassistant"
+
+# Get the path of the current working directory
+import os
+
+current_path = os.getcwd()
+print(f"Listing for: {current_path}\n")
+
+# os.listdir() returns a list of strings (filenames)
+try:
+    for item in os.listdir():
+        print(item)
+except FileNotFoundError:
+    print(f"Error: The directory '{current_path}' was not found.")
 
 
 # --- MQTT Publisher Class ---
