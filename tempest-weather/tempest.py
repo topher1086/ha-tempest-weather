@@ -70,6 +70,9 @@ for directory in dirs_to_list:
         print(f"Error: The directory '{directory}' was not found.")
     print("-" * 20)
 
+chromedriver_path = "/usr/bin/chromedriver"
+chrome_shell_binary_location = "./chrome-headless-shell-linux64/chrome-headless-shell"
+
 
 # --- MQTT Publisher Class ---
 class MQTTPublisher:
@@ -231,12 +234,12 @@ def main() -> None:  # noqa: C901, PLR0915
         except Exception:
             return None
 
-    # time.sleep(600)
+    time.sleep(600)
 
     url = f"https://tempestwx.com/station/{STATION_ID}"
-    service = ChromeService("/usr/bin/chromedriver")
+    service = ChromeService(chromedriver_path)
     chrome_options = webdriver.ChromeOptions()
-    # chrome_options.binary_location = "/chrome-headless-shell-linux64/chrome-headless-shell"
+    chrome_options.binary_location = chrome_shell_binary_location
     chrome_options.add_argument("--headless")
     chrome_options.add_argument(
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
