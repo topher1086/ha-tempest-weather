@@ -24,13 +24,13 @@ RUN pip3 install -r requirements.txt
 RUN apk add --no-cache wget unzip
 
 # Download and extract Chrome Headless Shell
-RUN wget -O /chrome-headless-shell-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.82/linux64/chrome-headless-shell-linux64.zip \
+RUN wget -O /chrome-headless-shell-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/126.0.6478.126/linux64/chrome-headless-shell-linux64.zip \
 	&& unzip /chrome-headless-shell-linux64.zip -d / \
 	&& rm /chrome-headless-shell-linux64.zip \
 	&& chmod +x /chrome-headless-shell-linux64/chrome-headless-shell
 
 # Download and extract Chromedriver
-RUN wget -O /chromedriver-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.82/linux64/chromedriver-linux64.zip \
+RUN wget -O /chromedriver-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/126.0.6478.126/linux64/chromedriver-linux64.zip \
 	&& unzip /chromedriver-linux64.zip -d / \
 	&& rm /chromedriver-linux64.zip \
 	&& chmod +x /chromedriver-linux64/chromedriver
