@@ -209,6 +209,11 @@ class MQTTPublisher:
             weather_data (dict): Dictionary of sensor names to values.
 
         """
+        if not self.client:
+            logger.warning("MQTT client not connected, reconnecting.")
+            self._setup_client()
+            return
+
         self.update_count += 1
         force = self.update_count % 60 == 0
         if force:
