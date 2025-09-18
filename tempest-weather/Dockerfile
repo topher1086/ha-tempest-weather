@@ -4,12 +4,6 @@ FROM ghcr.io/home-assistant/amd64-base:latest
 # Set shell to bash if available, otherwise sh
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Copy data for add-on
-COPY run.sh /
-COPY tempest.py /
-COPY requirements.txt /
-RUN chmod a+x /run.sh
-
 # Update apk cache and install all packages in a single layer to save space
 # - python3 and pip are needed for the script
 # - chromium and chromedriver are for selenium
@@ -28,8 +22,18 @@ ENV VIRTUAL_ENV=/.venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
+# Copy requirements.txt
+COPY requirements.txt /
+
 # Install python dependencies
 RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy data for add-on
+COPY run.sh /
+RUN chmod a+x /run.sh
+
+# Copy python script
+COPY tempest.py /
 
 # You can add CMD or ENTRYPOINT here depending on run.sh
 # For example:

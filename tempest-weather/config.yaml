@@ -1,6 +1,6 @@
 name: "Tempest Weather Scraper"
 description: "Scrapes weather data from Tempest webpage"
-version: "1.0.20"
+version: "1.0.22"
 slug: "tempest_weather_scraper"
 url: "https://github.com/topher1086/ha-tempest-weather"
 init: false
@@ -12,7 +12,7 @@ arch:
   - i386
 options:
   WEATHER_STATION_ID: null
-  MQTT_HOST: "supervisor"
+  MQTT_HOST: "core-mosquitto"
   MQTT_PORT: 1883
   MQTT_USER: null
   MQTT_PASS: null

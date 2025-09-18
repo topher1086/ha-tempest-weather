@@ -43,7 +43,7 @@ STATION_ID = settings.get("WEATHER_STATION_ID")
 
 
 # MQTT config (add these to your config.yaml or test_config.yaml as needed)
-MQTT_HOST = "supervisor" if in_addon else settings.get("MQTT_HOST")
+MQTT_HOST = settings.get("MQTT_HOST")
 MQTT_PORT = settings.get("MQTT_PORT", 1883)
 MQTT_USER = settings.get("MQTT_USER")
 MQTT_PASS = settings.get("MQTT_PASS")
