@@ -45,7 +45,8 @@ STATION_ID = settings.get("WEATHER_STATION_ID")
 
 # MQTT config (add these to your config.yaml or test_config.yaml as needed)
 MQTT_HOST = settings.get("MQTT_HOST")
-MQTT_PORT = settings.get("MQTT_PORT", 1883)
+MQTT_PORT = settings.get("MQTT_PORT", 1884)
+MQTT_TRANSPORT = settings.get("MQTT_TRANSPORT", "websockets")
 MQTT_USER = settings.get("MQTT_USER")
 MQTT_PASS = settings.get("MQTT_PASS")
 MQTT_CLIENT_ID = f"tempest_{STATION_ID}"
@@ -99,24 +100,18 @@ class MQTTPublisher:
 
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
-        host: str,
-        port: int,
-        user: str | None,
-        password: str | None,
-        client_id: str,
-        base: str,
-        station_id: str,
     ) -> None:
         """Initialize the MQTTPublisher with connection and sensor info."""
-        self.host = host
-        self.port = port
-        self.user = user
-        self.password = password
-        self.client_id = client_id
-        self.base = base
-        self.station_id = station_id
+        self.host = MQTT_HOST
+        self.port = MQTT_PORT
+        self.transport = MQTT_TRANSPORT
+        self.user = MQTT_USER
+        self.password = MQTT_PASS
+        self.client_id = MQTT_CLIENT_ID
+        self.base = MQTT_BASE
+        self.station_id = STATION_ID
         self.client: mqtt.Client | None = None
         self.last_values: dict[str, str | None] = {}
         self.sensors_configured: set[str] = set()
@@ -150,7 +145,7 @@ class MQTTPublisher:
         if not mqtt:
             logger.warning("paho-mqtt not installed, MQTT publishing disabled.")
             return
-        self.client = mqtt.Client(callback_api_version=2, client_id=self.client_id)
+        self.client = mqtt.Client(callback_api_version=2, client_id=self.client_id, transport=self.transport)
         if self.user:
             self.client.username_pw_set(self.user, self.password)
         try:
@@ -299,15 +294,7 @@ def main() -> None:  # noqa: C901, PLR0915
     loops = 3600 / sleep_time
 
     # Initialize persistent MQTT publisher
-    mqtt_publisher = MQTTPublisher(
-        MQTT_HOST,
-        MQTT_PORT,
-        MQTT_USER,
-        MQTT_PASS,
-        MQTT_CLIENT_ID,
-        MQTT_BASE,
-        STATION_ID,
-    )
+    mqtt_publisher = MQTTPublisher()
 
     try:
         for _ in range(int(loops)):
