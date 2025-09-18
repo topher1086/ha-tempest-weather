@@ -239,16 +239,24 @@ def main() -> None:  # noqa: C901, PLR0915
     url = f"https://tempestwx.com/station/{STATION_ID}"
     service = ChromeService(chromedriver_path)
     chrome_options = webdriver.ChromeOptions()
+
+    # Set the binary location (your code already does this correctly)
     chrome_options.binary_location = chrome_shell_binary_location
+
+    # --- ADD THESE ARGUMENTS ---
     chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")  # Essential for running as root in Docker
+    chrome_options.add_argument("--disable-dev-shm-usage")  # Overcomes limited resource problems
+    chrome_options.add_argument("--disable-gpu")  # Applicable for headless environments
     chrome_options.add_argument(
         "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
     )
+    # ---------------------------
+
     driver = webdriver.Chrome(
         service=service,
         options=chrome_options,
     )
-
     driver.get(url)
 
     css_refs = {
