@@ -231,6 +231,8 @@ def main() -> None:  # noqa: C901, PLR0915
         except Exception:
             return None
 
+    time.sleep(600)
+
     url = f"https://tempestwx.com/station/{STATION_ID}"
     service = ChromeService("/chromedriver-linux64/chromedriver")
     chrome_options = webdriver.ChromeOptions()
