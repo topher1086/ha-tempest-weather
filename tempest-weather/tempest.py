@@ -1,6 +1,7 @@
 from __future__ import annotations  # noqa: D100
 
 import json
+import random
 import sys
 import time
 from pathlib import Path
@@ -126,9 +127,9 @@ class MQTTPublisher:
             "feels_like": {"unit": "°F", "device_class": "temperature"},
             "dew_point": {"unit": "°F", "device_class": "temperature"},
             "pressure": {"unit": "inHg", "device_class": "pressure"},
-            "wind_speed": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy"},
-            "wind_gust_low": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy"},
-            "wind_gust_high": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy"},
+            "wind_speed": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy", "suggested_display_precision": 0},
+            "wind_gust_low": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy", "suggested_display_precision": 0},
+            "wind_gust_high": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy", "suggested_display_precision": 0},
             "wind_direction": {"unit": "°", "icon": "mdi:compass"},
             "wind_direction_cardinal": {"icon": "mdi:compass-outline"},
             "uv": {"device_class": "uv_index", "icon": "mdi:weather-sunny-alert"},
@@ -311,7 +312,7 @@ def main() -> None:  # noqa: C901, PLR0915
     try:
         for _ in range(int(loops)):
             try:
-                time.sleep(sleep_time)  # Wait for JS to render data; adjust as needed
+                time.sleep(sleep_time)
 
                 for k, v in css_refs.items():
                     new_val = safe_text(v)
@@ -350,6 +351,9 @@ def main() -> None:  # noqa: C901, PLR0915
                 mqtt_publisher.publish_weather(weather_data)
 
                 logger.info("*" * 20)
+
+                # add an extra random sleep here to avoid looking like a script
+                time.sleep(random.randint(1, sleep_time))  # noqa: S311
 
             except Exception as e:
                 logger.error(f"Error occurred: {e}")
