@@ -37,6 +37,8 @@ except FileNotFoundError:
 logger.remove()
 logger.add(sys.stderr, level=settings["LOGGING_LEVEL"] if in_addon else "DEBUG")
 
+logger.info("Running in add-on" if in_addon else "Running outside of add-on")
+
 STATION_ID = settings.get("WEATHER_STATION_ID")
 
 
@@ -70,8 +72,12 @@ MQTT_BASE = "homeassistant"
 #         print(f"Error: The directory '{directory}' was not found.")
 #     print("-" * 20)
 
-chromedriver_path = "/usr/bin/chromedriver"
-chrome_shell_binary_location = "/usr/bin/chromium"
+if in_addon:
+    chromedriver_path = "/usr/bin/chromedriver"
+    chrome_shell_binary_location = "/usr/bin/chromium"
+else:
+    chromedriver_path = "./chromedriver-linux64/chromedriver"
+    chrome_shell_binary_location = "./chrome-headless-shell-linux64/chrome-headless-shell"
 
 
 # --- MQTT Publisher Class ---
