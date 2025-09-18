@@ -24,13 +24,13 @@ RUN pip3 install -r requirements.txt
 RUN apk add --no-cache wget unzip
 
 # Download and extract Chrome Headless Shell
-RUN wget -O /tempest-weather/chrome-headless-shell-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.82/linux64/chrome-headless-shell-linux64.zip \
-	&& unzip /tempest-weather/chrome-headless-shell-linux64.zip -d / \
-	&& rm /tempest-weather/chrome-headless-shell-linux64.zip
+RUN wget -O /chrome-headless-shell-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.82/linux64/chrome-headless-shell-linux64.zip \
+	&& unzip /chrome-headless-shell-linux64.zip -d / \
+	&& rm /chrome-headless-shell-linux64.zip
 
 # Download and extract Chromedriver
-RUN wget -O /tempest-weather/chromedriver-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.82/linux64/chromedriver-linux64.zip \
-	&& unzip /tempest-weather/chromedriver-linux64.zip -d / \
-	&& rm /tempest-weather/chromedriver-linux64.zip
+RUN wget -O /chromedriver-linux64.zip https://storage.googleapis.com/chrome-for-testing-public/140.0.7339.82/linux64/chromedriver-linux64.zip \
+	&& unzip /chromedriver-linux64.zip -d / \
+	&& rm /chromedriver-linux64.zip
 
 CMD ["./run.sh"]
