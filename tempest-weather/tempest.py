@@ -49,29 +49,29 @@ MQTT_CLIENT_ID = f"tempest_{STATION_ID}"
 MQTT_BASE = "homeassistant"
 
 # Get the path of the current working directory
-import os
+# import os
 
-current_path = os.getcwd()
-print(f"Listing for: {current_path}\n")
+# current_path = os.getcwd()
+# print(f"Listing for: {current_path}\n")
 
-# os.listdir() returns a list of strings (filenames)
-try:
-    for item in os.listdir():
-        print(item)
-except FileNotFoundError:
-    print(f"Error: The directory '{current_path}' was not found.")
+# # os.listdir() returns a list of strings (filenames)
+# try:
+#     for item in os.listdir():
+#         print(item)
+# except FileNotFoundError:
+#     print(f"Error: The directory '{current_path}' was not found.")
 
-dirs_to_list = ["./chromedriver-linux64", "./chrome-headless-shell-linux64"]
-for directory in dirs_to_list:
-    print(f"Listing for: {os.path.abspath(directory)}\n")
-    try:
-        print("\n".join(os.listdir(directory)))
-    except FileNotFoundError:
-        print(f"Error: The directory '{directory}' was not found.")
-    print("-" * 20)
+# dirs_to_list = ["./chromedriver-linux64", "./chrome-headless-shell-linux64"]
+# for directory in dirs_to_list:
+#     print(f"Listing for: {os.path.abspath(directory)}\n")
+#     try:
+#         print("\n".join(os.listdir(directory)))
+#     except FileNotFoundError:
+#         print(f"Error: The directory '{directory}' was not found.")
+#     print("-" * 20)
 
 chromedriver_path = "/usr/bin/chromedriver"
-chrome_shell_binary_location = "./chrome-headless-shell-linux64/chrome-headless-shell"
+chrome_shell_binary_location = "/usr/bin/chromium"
 
 
 # --- MQTT Publisher Class ---
@@ -234,7 +234,7 @@ def main() -> None:  # noqa: C901, PLR0915
         except Exception:
             return None
 
-    time.sleep(600)
+    # time.sleep(600)
 
     url = f"https://tempestwx.com/station/{STATION_ID}"
     service = ChromeService(chromedriver_path)
