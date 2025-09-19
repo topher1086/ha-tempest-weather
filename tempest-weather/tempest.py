@@ -52,6 +52,8 @@ MQTT_PASS = settings.get("MQTT_PASS")
 MQTT_CLIENT_ID = f"tempest_{STATION_ID}"
 MQTT_BASE = "homeassistant"
 
+FORECAST_HOURS = 12
+
 # Get the path of the current working directory
 # import os
 
@@ -137,7 +139,31 @@ class MQTTPublisher:
             "daily_precip_chance": {"unit": "%", "icon": "mdi:weather-partly-rainy"},
             "daily_temp_high": {"unit": "°F", "device_class": "temperature", "icon": "mdi:thermometer-high"},
             "daily_temp_low": {"unit": "°F", "device_class": "temperature", "icon": "mdi:thermometer-low"},
+            "forecast_day_desc": {"icon": "mdi:weather-partly-cloudy"},
         }
+
+        self.sensor_meta.update(
+            {
+                f"forecast_hourly_temp_{x}": {"unit": "°F", "device_class": "temperature", "suggested_display_precision": 0}
+                for x in range(1, FORECAST_HOURS + 1)
+            },
+        )
+
+        self.sensor_meta.update(
+            {f"forecast_hourly_precip_{x}": {"unit": "%", "icon": "mdi:weather-partly-rainy"} for x in range(1, FORECAST_HOURS + 1)},
+        )
+
+        self.sensor_meta.update(
+            {
+                f"forecast_hourly_wind_{x}": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy"}
+                for x in range(1, FORECAST_HOURS + 1)
+            },
+        )
+
+        self.sensor_meta.update(
+            {f"forecast_hourly_wind_direction_{x}": {"icon": "mdi:compass-outline"} for x in range(1, FORECAST_HOURS + 1)},
+        )
+
         self._setup_client()
 
     def _setup_client(self) -> None:
@@ -241,6 +267,12 @@ def main() -> None:  # noqa: C901, PLR0915
         except Exception:
             return None
 
+    def get_aria_label(selector: str) -> str | None:
+        try:
+            return driver.find_element(By.CSS_SELECTOR, selector).find_element(By.CSS_SELECTOR, "p").get_attribute("aria-label")
+        except Exception:
+            return None
+
     # time.sleep(600)
 
     url = f"https://tempestwx.com/station/{STATION_ID}"
@@ -286,7 +318,16 @@ def main() -> None:  # noqa: C901, PLR0915
         "daily_precip_chance": "p.daily-precip-chance",  # CSS selector for daily precip chance
         "daily_temp_high": "p.daily-temp-high",  # CSS selector for daily high
         "daily_temp_low": "p.daily-temp-low",  # CSS selector for daily low
+        "forecast_day_desc": "p.forecast-day-desc",  # CSS selector for forecast day description
     }
+
+    css_refs.update({f"forecast_hourly_temp_{x}": f"tr.hourly-temp :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
+
+    css_refs.update({f"forecast_hourly_precip_{x}": f"tr.hourly-precip :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
+
+    css_refs.update({f"forecast_hourly_wind_{x}": f"tr.hourly-wind :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
+
+    css_refs.update({f"forecast_hourly_wind_direction_{x}": f"tr.hourly-wind :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
 
     weather_data = dict.fromkeys(css_refs.keys())
 
@@ -302,12 +343,19 @@ def main() -> None:  # noqa: C901, PLR0915
                 time.sleep(sleep_time)
 
                 for k, v in css_refs.items():
-                    new_val = safe_text(v)
+                    new_val = get_aria_label(v) if k.startswith("forecast_hourly_wind_direction_") else safe_text(v)
+
                     if new_val:
                         if k in ["temperature", "dew_point", "daily_temp_high", "daily_temp_low"]:
                             new_val = new_val.replace("°F", "").replace("°", "").strip()
                         if k == "feels_like":
                             new_val = new_val.replace("°", "").strip()
+
+                        if k.startswith("forecast_hourly_temp_"):
+                            new_val = new_val.replace("°", "").strip()
+
+                        if k.startswith("forecast_hourly_precip_"):
+                            new_val = new_val.replace("%", "").strip()
 
                         if k in {"humidity", "daily_precip_chance"}:
                             new_val = new_val.replace("%", "").strip()
@@ -317,6 +365,9 @@ def main() -> None:  # noqa: C901, PLR0915
 
                         if k in {"precipitation_rate", "pressure_trend"}:
                             new_val = new_val.title()
+
+                        if k.startswith("forecast_hourly_wind_direction_"):
+                            new_val = new_val.split(" ")[-1].upper()
 
                         if k == "wind_gusts":
                             n_val = new_val.replace(" mph", "").strip().replace(" ", "")
