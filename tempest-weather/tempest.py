@@ -128,7 +128,7 @@ class MQTTPublisher:
             "wind_direction": {"unit": "°", "icon": "mdi:compass"},
             "wind_direction_cardinal": {"icon": "mdi:compass-outline"},
             "uv": {"unit": "UV", "icon": "mdi:weather-sunny-alert"},
-            "precipitation_rate": {"unit": "in/h", "device_class": "precipitation_intensity", "icon": "mdi:weather-rainy"},
+            "precipitation_rate": {"icon": "mdi:weather-rainy"},
             "precipitation_today": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy", "suggested_display_precision": 2},
             "precipitation_yesterday": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy", "suggested_display_precision": 2},
             "lightning_last_3_hrs": {"unit": "strikes", "icon": "mdi:flash"},
@@ -315,8 +315,8 @@ def main() -> None:  # noqa: C901, PLR0915
                         if k in ["precipitation_today", "precipitation_yesterday"]:
                             new_val = new_val.replace('"', "").strip()
 
-                        if k == "precipitation_rate" and new_val.lower() == "none":
-                            new_val = 0.0
+                        if k == "precipitation_rate":
+                            new_val = new_val.title()
 
                         if k == "wind_gusts":
                             n_val = new_val.replace(" mph", "").strip().replace(" ", "")
