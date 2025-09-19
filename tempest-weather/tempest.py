@@ -131,9 +131,9 @@ class MQTTPublisher:
             "precipitation_rate": {"unit": "in/h", "device_class": "precipitation_intensity", "icon": "mdi:weather-rainy"},
             "precipitation_today": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy", "suggested_display_precision": 2},
             "precipitation_yesterday": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy", "suggested_display_precision": 2},
-            "lightning_last_3_hrs": {"icon": "mdi:flash"},
+            "lightning_last_3_hrs": {"unit": "strikes", "icon": "mdi:flash"},
             "last_lightning_strike": {"icon": "mdi:flash-alert"},
-            "lightning_last_distance": {"icon": "mdi:map-marker-distance"},
+            "lightning_last_distance": {"unit": "mi", "icon": "mdi:map-marker-distance"},
             "daily_precip_chance": {"unit": "%", "icon": "mdi:weather-partly-rainy"},
             "daily_temp_high": {"unit": "°F", "device_class": "temperature", "icon": "mdi:thermometer-high"},
             "daily_temp_low": {"unit": "°F", "device_class": "temperature", "icon": "mdi:thermometer-low"},
@@ -327,6 +327,13 @@ def main() -> None:  # noqa: C901, PLR0915
                             weather_data["wind_gust_low"] = low_val
                             weather_data["wind_gust_high"] = high_val
                             continue
+
+                        if k == "lightning_last_distance":
+                            new_val = new_val.replace(" mi", "").strip().replace(" ", "")
+                            splits = new_val.split("-")
+                            spl_cnt = len(splits)
+                            total_dist = sum(float(s) for s in splits) if spl_cnt > 0 else 0.0
+                            new_val = int(total_dist / spl_cnt) if spl_cnt > 0 else 0
 
                         weather_data[k] = new_val
 
