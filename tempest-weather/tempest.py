@@ -364,7 +364,7 @@ def main() -> None:  # noqa: C901, PLR0915
                             new_val = new_val.replace('"', "").strip()
 
                         if k in {"precipitation_rate", "pressure_trend"}:
-                            new_val = new_val.title()
+                            new_val = "Dry" if new_val.lower() == "none" else new_val.title()
 
                         if k.startswith("forecast_hourly_wind_direction_"):
                             new_val = new_val.split(" ")[-1].upper()
