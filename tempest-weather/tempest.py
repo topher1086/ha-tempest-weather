@@ -315,7 +315,7 @@ def main() -> None:  # noqa: C901, PLR0915
                         if k in ["precipitation_today", "precipitation_yesterday"]:
                             new_val = new_val.replace('"', "").strip()
 
-                        if k == "precipitation_rate":
+                        if k in {"precipitation_rate", "pressure_trend"}:
                             new_val = new_val.title()
 
                         if k == "wind_gusts":
@@ -347,7 +347,7 @@ def main() -> None:  # noqa: C901, PLR0915
 
                 mqtt_publisher.publish_weather(weather_data)
 
-                logger.info("*" * 20)
+                logger.info("*" * 40)
 
                 # add an extra random sleep here to avoid looking like a script
                 time.sleep(random.randint(1, sleep_time))  # noqa: S311
