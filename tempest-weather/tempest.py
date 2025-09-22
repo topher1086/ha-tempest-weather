@@ -1,4 +1,4 @@
-from __future__ import annotations  # noqa: D100
+from __future__ import annotations  # noqa: D100, INP001
 
 import json
 import random
@@ -262,7 +262,7 @@ class MQTTPublisher:
             logger.info("Disconnected from MQTT broker.")
 
 
-def main() -> None:  # noqa: C901, PLR0915
+def main() -> None:  # noqa: C901, PLR0912, PLR0915
     """Scrapes weather data from a Tempest Weather station web page using Selenium and headless Chrome."""
 
     def safe_text(selector: str) -> str | None:
