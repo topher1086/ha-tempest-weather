@@ -143,6 +143,10 @@ class MQTTPublisher:
         }
 
         self.sensor_meta.update(
+            {f"forecast_hourly_time_{x}": {"icon": "mdi:clock-outline"} for x in range(1, FORECAST_HOURS + 1)},
+        )
+
+        self.sensor_meta.update(
             {
                 f"forecast_hourly_temp_{x}": {"unit": "°F", "device_class": "temperature", "suggested_display_precision": 0}
                 for x in range(1, FORECAST_HOURS + 1)
@@ -320,6 +324,8 @@ def main() -> None:  # noqa: C901, PLR0915
         "daily_temp_low": "p.daily-temp-low",  # CSS selector for daily low
         "forecast_day_desc": "p.forecast-day-desc",  # CSS selector for forecast day description
     }
+
+    css_refs.update({f"forecast_hourly_time_{x}": f"tr.hour :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
 
     css_refs.update({f"forecast_hourly_temp_{x}": f"tr.hourly-temp :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
 
