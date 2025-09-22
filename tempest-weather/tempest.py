@@ -130,6 +130,7 @@ class MQTTPublisher:
             "wind_direction": {"unit": "°", "icon": "mdi:compass"},
             "wind_direction_cardinal": {"icon": "mdi:compass-outline"},
             "uv": {"unit": "UV", "icon": "mdi:weather-sunny-alert"},
+            "brightness": {"unit": "lx", "device_class": "illuminance", "icon": "mdi:brightness-7"},
             "precipitation_rate": {"icon": "mdi:weather-rainy"},
             "precipitation_today": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy", "suggested_display_precision": 2},
             "precipitation_yesterday": {"unit": "in", "device_class": "precipitation", "icon": "mdi:weather-rainy", "suggested_display_precision": 2},
@@ -262,7 +263,56 @@ class MQTTPublisher:
             logger.info("Disconnected from MQTT broker.")
 
 
-def main() -> None:  # noqa: C901, PLR0912, PLR0915
+def _clean_degrees(val: str) -> str:
+    """Remove degree symbols and whitespace."""
+    return val.replace("°F", "").replace("°", "").strip()
+
+
+def _clean_percent(val: str) -> str:
+    """Remove percent symbols and whitespace."""
+    return val.replace("%", "").strip()
+
+
+def _clean_inches(val: str) -> str:
+    """Remove inch marks and whitespace."""
+    return val.replace('"', "").strip()
+
+
+def _clean_precip_rate(val: str) -> str:
+    """Clean precipitation rate."""
+    return "Dry" if val.lower() == "none" else val.title()
+
+
+def _clean_wind_direction(val: str) -> str:
+    """Extract cardinal wind direction."""
+    return val.split(" ")[-1].upper()
+
+
+def _clean_brightness(val: str) -> str:
+    """Clean brightness value."""
+    return val.replace(" lux", "").strip()
+
+
+def _parse_wind_gusts(val: str, weather_data: dict) -> None:
+    """Parse wind gust data into low and high values."""
+    n_val = val.replace(" mph", "").strip().replace(" ", "")
+    splits = n_val.split("-")
+    low_val = splits[0]
+    high_val = splits[1] if len(splits) > 1 else splits[0]
+    weather_data["wind_gust_low"] = low_val
+    weather_data["wind_gust_high"] = high_val
+
+
+def _parse_lightning_distance(val: str) -> int:
+    """Parse lightning distance, averaging if a range is given."""
+    new_val = val.replace(" mi", "").strip().replace(" ", "")
+    splits = new_val.split("-")
+    spl_cnt = len(splits)
+    total_dist = sum(float(s) for s in splits) if spl_cnt > 0 else 0.0
+    return int(total_dist / spl_cnt) if spl_cnt > 0 else 0
+
+
+def main() -> None:  # noqa: C901, PLR0915
     """Scrapes weather data from a Tempest Weather station web page using Selenium and headless Chrome."""
 
     def safe_text(selector: str) -> str | None:
@@ -319,6 +369,7 @@ def main() -> None:  # noqa: C901, PLR0912, PLR0915
         "precipitation_today": "[data-param='param-precip_accum_local_today_final_display_with_units']",
         "precipitation_yesterday": "[data-param='param-precip_accumm_local_yesterday_final_display_with_units']",
         "uv": "[data-param='param-uv_with_index']",
+        "brightness": "[data-param='param-lux_display_with_units']",
         "daily_precip_chance": "p.daily-precip-chance",  # CSS selector for daily precip chance
         "daily_temp_high": "p.daily-temp-high",  # CSS selector for daily high
         "daily_temp_low": "p.daily-temp-low",  # CSS selector for daily low
@@ -337,6 +388,26 @@ def main() -> None:  # noqa: C901, PLR0912, PLR0915
 
     weather_data = dict.fromkeys(css_refs.keys())
 
+    cleaning_rules = {
+        "temperature": _clean_degrees,
+        "dew_point": _clean_degrees,
+        "daily_temp_high": _clean_degrees,
+        "daily_temp_low": _clean_degrees,
+        "feels_like": _clean_degrees,
+        "forecast_hourly_temp_": _clean_degrees,
+        "forecast_hourly_precip_": _clean_percent,
+        "humidity": _clean_percent,
+        "daily_precip_chance": _clean_percent,
+        "precipitation_today": _clean_inches,
+        "precipitation_yesterday": _clean_inches,
+        "precipitation_rate": _clean_precip_rate,
+        "pressure_trend": _clean_precip_rate,
+        "forecast_hourly_wind_direction_": _clean_wind_direction,
+        "wind_gusts": lambda val, data=weather_data: _parse_wind_gusts(val, data),
+        "lightning_last_distance": _parse_lightning_distance,
+        "brightness": _clean_brightness,
+    }
+
     sleep_time = 15
     loops = 3600 / sleep_time
 
@@ -352,45 +423,13 @@ def main() -> None:  # noqa: C901, PLR0912, PLR0915
                     new_val = get_aria_label(v) if k.startswith("forecast_hourly_wind_direction_") else safe_text(v)
 
                     if new_val:
-                        if k in ["temperature", "dew_point", "daily_temp_high", "daily_temp_low"]:
-                            new_val = new_val.replace("°F", "").replace("°", "").strip()
-                        if k == "feels_like":
-                            new_val = new_val.replace("°", "").strip()
-
-                        if k.startswith("forecast_hourly_temp_"):
-                            new_val = new_val.replace("°", "").strip()
-
-                        if k.startswith("forecast_hourly_precip_"):
-                            new_val = new_val.replace("%", "").strip()
-
-                        if k in {"humidity", "daily_precip_chance"}:
-                            new_val = new_val.replace("%", "").strip()
-
-                        if k in ["precipitation_today", "precipitation_yesterday"]:
-                            new_val = new_val.replace('"', "").strip()
-
-                        if k in {"precipitation_rate", "pressure_trend"}:
-                            new_val = "Dry" if new_val.lower() == "none" else new_val.title()
-
-                        if k.startswith("forecast_hourly_wind_direction_"):
-                            new_val = new_val.split(" ")[-1].upper()
-
-                        if k == "wind_gusts":
-                            n_val = new_val.replace(" mph", "").strip().replace(" ", "")
-                            splits = n_val.split("-")
-                            low_val = splits[0]
-                            high_val = splits[1] if len(splits) > 1 else splits[0]
-
-                            weather_data["wind_gust_low"] = low_val
-                            weather_data["wind_gust_high"] = high_val
-                            continue
-
-                        if k == "lightning_last_distance":
-                            new_val = new_val.replace(" mi", "").strip().replace(" ", "")
-                            splits = new_val.split("-")
-                            spl_cnt = len(splits)
-                            total_dist = sum(float(s) for s in splits) if spl_cnt > 0 else 0.0
-                            new_val = int(total_dist / spl_cnt) if spl_cnt > 0 else 0
+                        # Find and apply the correct cleaning rule
+                        rule_key = next((rule for rule in cleaning_rules if k.startswith(rule)), None)
+                        if rule_key:
+                            if rule_key in ["wind_gusts"]:
+                                cleaning_rules[rule_key](new_val)
+                                continue
+                            new_val = cleaning_rules[rule_key](new_val)
 
                         weather_data[k] = new_val
 
