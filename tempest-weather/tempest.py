@@ -4,6 +4,7 @@ import json
 import random
 import sys
 import time
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
@@ -141,33 +142,9 @@ class MQTTPublisher:
             "daily_temp_high": {"unit": "°F", "device_class": "temperature", "icon": "mdi:thermometer-high"},
             "daily_temp_low": {"unit": "°F", "device_class": "temperature", "icon": "mdi:thermometer-low"},
             "forecast_day_desc": {"icon": "mdi:weather-partly-cloudy"},
+            "weather": {"icon": "mdi:weather-partly-cloudy"},
+            "forecast": {"icon": "mdi:weather-partly-cloudy", "value_template": "{{ value_json[0].condition }}"},
         }
-
-        self.sensor_meta.update(
-            {f"forecast_hourly_time_{x}": {"icon": "mdi:clock-outline"} for x in range(1, FORECAST_HOURS + 1)},
-        )
-
-        self.sensor_meta.update(
-            {
-                f"forecast_hourly_temp_{x}": {"unit": "°F", "device_class": "temperature", "suggested_display_precision": 0}
-                for x in range(1, FORECAST_HOURS + 1)
-            },
-        )
-
-        self.sensor_meta.update(
-            {f"forecast_hourly_precip_{x}": {"unit": "%", "icon": "mdi:weather-partly-rainy"} for x in range(1, FORECAST_HOURS + 1)},
-        )
-
-        self.sensor_meta.update(
-            {
-                f"forecast_hourly_wind_{x}": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy"}
-                for x in range(1, FORECAST_HOURS + 1)
-            },
-        )
-
-        self.sensor_meta.update(
-            {f"forecast_hourly_wind_direction_{x}": {"icon": "mdi:compass-outline"} for x in range(1, FORECAST_HOURS + 1)},
-        )
 
         self._setup_client()
 
@@ -228,12 +205,18 @@ class MQTTPublisher:
                 config_payload["icon"] = meta["icon"]
             if meta.get("suggested_display_precision"):
                 config_payload["suggested_display_precision"] = meta["suggested_display_precision"]
+            if meta.get("value_template"):
+                config_payload["value_template"] = meta["value_template"]
+                config_payload["json_attributes_topic"] = state_topic
+                if sensor == "forecast":
+                    config_payload["json_attributes_template"] = "{{ {'forecast': value_json} | tojson }}"
+
             self.client.publish(config_topic, json.dumps(config_payload), retain=True)
 
             self.sensors_configured.add(sensor)
             logger.info(f"Published MQTT config for {sensor}")
 
-        self.client.publish(state_topic, str(value) if value is not None else "", retain=True)
+        self.client.publish(state_topic, json.dumps(value) if value is not None else "", retain=True)
 
     def publish_weather(self, weather_data: dict[str, str | None]) -> None:
         """Publish all weather data to MQTT, only sending values that have changed.
@@ -293,6 +276,29 @@ def _clean_brightness(val: str) -> str:
     return val.replace(" lux", "").strip()
 
 
+def _to_iso_datetime(time_str: str) -> str:
+    """Convert 'X am/pm' time to ISO 8601 format for today or tomorrow."""
+    now = datetime.now()
+    # Special case for "Now"
+    if time_str.lower() == "now":
+        return now.isoformat()
+
+    # Parse time like "2 pm"
+    try:
+        hour_time = datetime.strptime(time_str, "%I %p")
+        # Create a datetime object for today with the parsed time
+        forecast_dt = now.replace(hour=hour_time.hour, minute=0, second=0, microsecond=0)
+
+        # If the forecast time is in the past, it must be for tomorrow
+        if forecast_dt < now:
+            forecast_dt += timedelta(days=1)
+
+        return forecast_dt.isoformat()
+    except ValueError:
+        logger.warning(f"Could not parse time: {time_str}")
+        return time_str  # Return original if parsing fails
+
+
 def _parse_wind_gusts(val: str, weather_data: dict) -> None:
     """Parse wind gust data into low and high values."""
     n_val = val.replace(" mph", "").strip().replace(" ", "")
@@ -321,11 +327,26 @@ def main() -> None:  # noqa: C901, PLR0915
         except Exception:
             return None
 
-    def get_aria_label(selector: str) -> str | None:
-        try:
-            return driver.find_element(By.CSS_SELECTOR, selector).find_element(By.CSS_SELECTOR, "p").get_attribute("aria-label")
-        except Exception:
-            return None
+    def get_aria_label_nested(selector: str) -> str | None:
+        elements = driver.find_elements(By.CSS_SELECTOR, selector)
+
+        return get_aria_nested(elements)
+
+    def get_aria_nested(element_list: list) -> str | None:
+        for element in element_list:
+            try:
+                a_label = element.accessible_name
+                if isinstance(a_label, str) and len(a_label) > 0:
+                    return a_label
+            except AttributeError:  # noqa: PERF203
+                a_label = None
+
+        for element in element_list:
+            children = element.find_elements(By.XPATH, "./*")
+            a_label = get_aria_nested(children)
+            if a_label:
+                return a_label
+        return None
 
     # time.sleep(600)
 
@@ -374,7 +395,10 @@ def main() -> None:  # noqa: C901, PLR0915
         "daily_temp_high": "p.daily-temp-high",  # CSS selector for daily high
         "daily_temp_low": "p.daily-temp-low",  # CSS selector for daily low
         "forecast_day_desc": "p.forecast-day-desc",  # CSS selector for forecast day description
+        # "weather": "#conditions-str",
     }
+
+    css_refs.update({f"forecast_hourly_condition_{x}": f"tr.hourly-sky :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
 
     css_refs.update({f"forecast_hourly_time_{x}": f"tr.hour :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
 
@@ -406,6 +430,8 @@ def main() -> None:  # noqa: C901, PLR0915
         "wind_gusts": lambda val, data=weather_data: _parse_wind_gusts(val, data),
         "lightning_last_distance": _parse_lightning_distance,
         "brightness": _clean_brightness,
+        # "weather": lambda val: val.split(" ")[0].lower(),
+        "forecast_hourly_time_": _to_iso_datetime,
     }
 
     sleep_time = 15
@@ -420,7 +446,13 @@ def main() -> None:  # noqa: C901, PLR0915
                 time.sleep(sleep_time)
 
                 for k, v in css_refs.items():
-                    new_val = get_aria_label(v) if k.startswith("forecast_hourly_wind_direction_") else safe_text(v)
+                    new_val = (
+                        get_aria_label_nested(v)
+                        if k.startswith(("forecast_hourly_wind_direction_", "forecast_hourly_condition_"))
+                        else driver.find_element(By.CSS_SELECTOR, v).get_attribute("aria-label")
+                        if k == "weather"
+                        else safe_text(v)
+                    )
 
                     if new_val:
                         # Find and apply the correct cleaning rule
@@ -432,6 +464,19 @@ def main() -> None:  # noqa: C901, PLR0915
                             new_val = cleaning_rules[rule_key](new_val)
 
                         weather_data[k] = new_val
+
+                forecast = [
+                    {
+                        "condition": weather_data.get(f"forecast_hourly_condition_{i}"),
+                        "datetime": weather_data.get(f"forecast_hourly_time_{i}"),
+                        "native_temperature": float(weather_data.get(f"forecast_hourly_temp_{i}")),
+                        "precipitation_probability": int(weather_data.get(f"forecast_hourly_precip_{i}")),
+                        "native_wind_speed": int(weather_data.get(f"forecast_hourly_wind_{i}")),
+                        "wind_bearing": weather_data.get(f"forecast_hourly_wind_direction_{i}"),
+                    }
+                    for i in range(1, FORECAST_HOURS + 1)
+                ]
+                weather_data["forecast"] = forecast
 
                 # Click the 'Observations' button if present after each loop
                 try:
