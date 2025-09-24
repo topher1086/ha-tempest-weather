@@ -216,7 +216,10 @@ class MQTTPublisher:
             self.sensors_configured.add(sensor)
             logger.info(f"Published MQTT config for {sensor}")
 
-        self.client.publish(state_topic, str(value) if isinstance(value, str) else json.dumps(value) if value is not None else "", retain=True)
+        # self.client.publish(state_topic, str(value) if value is not None else "", retain=True)
+        val = json.dumps(value) if isinstance(value, list | dict) else str(value) if value is not None else ""
+
+        self.client.publish(state_topic, val, retain=True)
 
     def publish_weather(self, weather_data: dict[str, str | None]) -> None:
         """Publish all weather data to MQTT, only sending values that have changed.
