@@ -4,6 +4,7 @@ import json
 import random
 import sys
 import time
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -318,65 +319,63 @@ def _parse_wind_gusts(val: str, weather_data: dict) -> None:
 
 def _parse_lightning_distance(val: str) -> int:
     """Parse lightning distance, averaging if a range is given."""
-    new_val = val.replace(" mi", "").strip().replace(" ", "")
+    new_val = str(val).replace(" mi", "").strip().replace(" ", "")
     splits = new_val.split("-")
     spl_cnt = len(splits)
     total_dist = sum(float(s) for s in splits) if spl_cnt > 0 else 0.0
     return int(total_dist / spl_cnt) if spl_cnt > 0 else 0
 
 
-def _map_condition(condition: str, *, is_night: bool | None = None) -> str:
-    """Map weather condition to HA weather entity value."""
-    condition = condition.lower().strip()
-    mapping = {
-        "clear": "sunny",
-        "cloudy": "cloudy",
-        "fog": "fog",
-        "hail": "hail",
-        "lightning": "lightning",
-        "lightning, rainy": "lightning-rainy",
-        "partly cloudy": "partlycloudy",
-        "pouring": "pouring",
-        "rainy": "rainy",
-        "snowy": "snowy",
-        "snowy, rainy": "snowy-rainy",
+def _clean_condition(val: str) -> str:
+    """Clean condition string."""
+    cond_list = [
+        "clear-night",
+        "cloudy",
+        "fog",
+        "hail",
+        "lightning",
+        "lightning-rainy",
+        "partlycloudy",
+        "pouring",
+        "rainy",
+        "snowy",
+        "snowy-rainy",
+        "sunny",
+        "windy",
+        "windy-variant",
+        "exceptional",
+    ]
+
+    if not isinstance(val, str):
+        return val
+
+    val_clean = val.strip().lower()
+
+    # Mapping for special cases
+    special_cases = {
+        "thunderstorm": "lightning-rainy",
+        "partlycloudy": "partlycloudy",
         "sunny": "sunny",
-        "windy": "windy",
-        "windy, cloudy": "windy-variant",
-        "exceptional": "exceptional",
+        "clear-night": "clear-night",
     }
-    ha_condition = mapping.get(condition, condition)
 
-    if ha_condition == "sunny" and is_night:
-        return "clear-night"
+    # Check for direct match
+    if val_clean in cond_list:
+        return val_clean
 
-    return ha_condition
+    # Check for special cases
+    if "thunderstorm" in val_clean:
+        return special_cases["thunderstorm"]
+    if "partly" in val_clean and "cloudy" in val_clean:
+        return special_cases["partlycloudy"]
+    if "clear" in val_clean and "day" in val_clean:
+        return special_cases["sunny"]
+    if "clear" in val_clean and "night" in val_clean:
+        return special_cases["clear-night"]
 
-
-def _clean_conditions(val: str, weather_data: dict) -> str:
-    """Clean current conditions string and map to HA value."""
-    is_night = None
-    if weather_data.get("brightness"):
-        try:
-            brightness = int(weather_data["brightness"])
-            is_night = brightness < NIGHT_LUX_LEVEL
-        except (ValueError, TypeError):
-            is_night = None
-
-    return _map_condition(val.strip(), is_night=is_night)
-
-
-def _clean_forecast_condition(val: str, forecast_time_iso: str | None) -> str:
-    """Clean forecast condition string and map to HA value."""
-    is_night = None
-    if forecast_time_iso:
-        try:
-            dt_obj = datetime.fromisoformat(forecast_time_iso)
-            is_night = dt_obj.hour < DAY_HOUR_START or dt_obj.hour >= NIGHT_HOUR_START
-        except (ValueError, TypeError):
-            is_night = None
-
-    return _map_condition(val.strip(), is_night=is_night)
+    # Check if any condition in cond_list is a substring
+    found_cond = next((c for c in cond_list if c in val_clean), None)
+    return found_cond if found_cond else val_clean
 
 
 def wind_cardinal_to_degrees(cardinal: str) -> float:
@@ -525,8 +524,8 @@ def main() -> None:  # noqa: C901, PLR0915
         "wind_gusts": lambda val, data=weather_data: _parse_wind_gusts(val, data),
         "lightning_last_distance": _parse_lightning_distance,
         "brightness": _clean_brightness,
-        "current_conditions": lambda val, data=weather_data: _clean_conditions(val, data),
-        "forecast_hourly_condition_": _clean_forecast_condition,
+        "current_conditions": _clean_condition,
+        "forecast_hourly_condition_": _clean_condition,
         "forecast_hourly_time_": _to_iso_datetime,
     }
 
@@ -567,7 +566,7 @@ def main() -> None:  # noqa: C901, PLR0915
 
                 forecast = [
                     {
-                        "condition": weather_data.get(f"forecast_hourly_condition_{i}").lower(),
+                        "condition": weather_data.get(f"forecast_hourly_condition_{i}"),
                         "datetime": weather_data.get(f"forecast_hourly_time_{i}"),
                         "native_temperature": float(weather_data.get(f"forecast_hourly_temp_{i}")),
                         "precipitation_probability": int(weather_data.get(f"forecast_hourly_precip_{i}")),
@@ -596,9 +595,12 @@ def main() -> None:  # noqa: C901, PLR0915
 
             except Exception as e:
                 logger.error(f"Error occurred: {e}")
+                logger.error(traceback.format_exc())
     finally:
         driver.quit()
         mqtt_publisher.disconnect()
+
+
 if __name__ == "__main__":
     while True:
         main()
