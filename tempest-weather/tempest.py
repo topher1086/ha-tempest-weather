@@ -54,6 +54,9 @@ MQTT_CLIENT_ID = f"tempest_{STATION_ID}"
 MQTT_BASE = "homeassistant"
 
 FORECAST_HOURS = 12
+NIGHT_LUX_LEVEL = 10
+NIGHT_HOUR_START = 19
+DAY_HOUR_START = 6
 
 # Get the path of the current working directory
 # import os
@@ -321,9 +324,59 @@ def _parse_lightning_distance(val: str) -> int:
     total_dist = sum(float(s) for s in splits) if spl_cnt > 0 else 0.0
     return int(total_dist / spl_cnt) if spl_cnt > 0 else 0
 
-def _clean_conditions(val: str) -> str:
-    """Clean current conditions string."""
-    return val.strip().title()
+
+def _map_condition(condition: str, *, is_night: bool | None = None) -> str:
+    """Map weather condition to HA weather entity value."""
+    condition = condition.lower().strip()
+    mapping = {
+        "clear": "sunny",
+        "cloudy": "cloudy",
+        "fog": "fog",
+        "hail": "hail",
+        "lightning": "lightning",
+        "lightning, rainy": "lightning-rainy",
+        "partly cloudy": "partlycloudy",
+        "pouring": "pouring",
+        "rainy": "rainy",
+        "snowy": "snowy",
+        "snowy, rainy": "snowy-rainy",
+        "sunny": "sunny",
+        "windy": "windy",
+        "windy, cloudy": "windy-variant",
+        "exceptional": "exceptional",
+    }
+    ha_condition = mapping.get(condition, condition)
+
+    if ha_condition == "sunny" and is_night:
+        return "clear-night"
+
+    return ha_condition
+
+
+def _clean_conditions(val: str, weather_data: dict) -> str:
+    """Clean current conditions string and map to HA value."""
+    is_night = None
+    if weather_data.get("brightness"):
+        try:
+            brightness = int(weather_data["brightness"])
+            is_night = brightness < NIGHT_LUX_LEVEL
+        except (ValueError, TypeError):
+            is_night = None
+
+    return _map_condition(val.strip(), is_night=is_night)
+
+
+def _clean_forecast_condition(val: str, forecast_time_iso: str | None) -> str:
+    """Clean forecast condition string and map to HA value."""
+    is_night = None
+    if forecast_time_iso:
+        try:
+            dt_obj = datetime.fromisoformat(forecast_time_iso)
+            is_night = dt_obj.hour < DAY_HOUR_START or dt_obj.hour >= NIGHT_HOUR_START
+        except (ValueError, TypeError):
+            is_night = None
+
+    return _map_condition(val.strip(), is_night=is_night)
 
 
 def wind_cardinal_to_degrees(cardinal: str) -> float:
@@ -472,8 +525,8 @@ def main() -> None:  # noqa: C901, PLR0915
         "wind_gusts": lambda val, data=weather_data: _parse_wind_gusts(val, data),
         "lightning_last_distance": _parse_lightning_distance,
         "brightness": _clean_brightness,
-        "current_conditions": _clean_conditions,
-        "forecast_hourly_condition_": _clean_conditions,
+        "current_conditions": lambda val, data=weather_data: _clean_conditions(val, data),
+        "forecast_hourly_condition_": _clean_forecast_condition,
         "forecast_hourly_time_": _to_iso_datetime,
     }
 
