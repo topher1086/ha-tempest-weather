@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
+import pytz
 import yaml
 from loguru import logger
 from selenium import webdriver
@@ -284,9 +285,11 @@ def _clean_brightness(val: str) -> str:
     return val.replace(" lux", "").strip()
 
 
-def _to_iso_datetime(time_str: str) -> str:
+def _to_iso_datetime(time_str: str, weather_data: dict) -> str:
     """Convert 'X am/pm' time to ISO 8601 format for today or tomorrow."""
-    now = datetime.now()
+    tz = pytz.timezone(weather_data["station_timezone"]) if weather_data.get("station_timezone") else pytz.timezone("America/Los_Angeles")
+
+    now = datetime.now(tz)
     # Special case for "Now"
     if time_str.lower() == "now":
         return now.isoformat()
@@ -468,6 +471,7 @@ def main() -> None:  # noqa: C901, PLR0915
     driver.get(url)
 
     css_refs = {
+        "station_timezone": "#station-timezone",
         "temperature": "[data-param='param-air_temp_with_symbol_and_units']",
         "dew_point": "[data-param='param-heat_index_or_dew_point_display']",
         "humidity": "[data-param='param-rh_with_symbol']",
@@ -526,7 +530,7 @@ def main() -> None:  # noqa: C901, PLR0915
         "brightness": _clean_brightness,
         "current_conditions": _clean_condition,
         "forecast_hourly_condition_": _clean_condition,
-        "forecast_hourly_time_": _to_iso_datetime,
+        "forecast_hourly_time_": lambda val, data=weather_data: _to_iso_datetime(val, data),
     }
 
     sleep_time = 15
@@ -571,7 +575,6 @@ def main() -> None:  # noqa: C901, PLR0915
                         "native_temperature": float(weather_data.get(f"forecast_hourly_temp_{i}")),
                         "precipitation_probability": int(weather_data.get(f"forecast_hourly_precip_{i}")),
                         "native_wind_speed": int(weather_data.get(f"forecast_hourly_wind_{i}")),
-                        "wind_bearing_cardinal": weather_data.get(f"forecast_hourly_wind_direction_{i}"),
                         "wind_bearing": wind_cardinal_to_degrees(weather_data.get(f"forecast_hourly_wind_direction_{i}")),
                     }
                     for i in range(1, FORECAST_HOURS + 1)
