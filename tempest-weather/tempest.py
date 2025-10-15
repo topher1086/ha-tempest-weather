@@ -360,21 +360,25 @@ def _clean_condition(val: str) -> str:
         "partlycloudy": "partlycloudy",
         "sunny": "sunny",
         "clear-night": "clear-night",
+        "clear": "sunny",
     }
 
     # Check for direct match
     if val_clean in cond_list:
         return val_clean
 
+    if val_clean in special_cases:
+        return special_cases[val_clean]
+
     # Check for special cases
     if "thunderstorm" in val_clean:
         return special_cases["thunderstorm"]
     if "partly" in val_clean and "cloudy" in val_clean:
         return special_cases["partlycloudy"]
-    if "clear" in val_clean and "day" in val_clean:
-        return special_cases["sunny"]
     if "clear" in val_clean and "night" in val_clean:
         return special_cases["clear-night"]
+    if "clear" in val_clean and "day" in val_clean:
+        return special_cases["sunny"]
 
     # Check if any condition in cond_list is a substring
     found_cond = next((c for c in cond_list if c in val_clean), None)
