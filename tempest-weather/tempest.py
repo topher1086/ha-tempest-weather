@@ -130,6 +130,7 @@ class MQTTPublisher:
             "wind_gust_high": {"unit": "mph", "device_class": "wind_speed", "icon": "mdi:weather-windy", "suggested_display_precision": 0},
             "wind_direction": {"unit": "°", "icon": "mdi:compass"},
             "wind_direction_cardinal": {"icon": "mdi:compass-outline"},
+            "wind_bearing": {"unit": "°", "icon": "mdi:compass"},
             "uv": {"unit": "UV", "icon": "mdi:weather-sunny-alert"},
             "brightness": {"unit": "lx", "device_class": "illuminance", "icon": "mdi:brightness-7"},
             "precipitation_rate": {"icon": "mdi:weather-rainy"},
@@ -142,7 +143,7 @@ class MQTTPublisher:
             "daily_temp_high": {"unit": "°F", "device_class": "temperature", "icon": "mdi:thermometer-high"},
             "daily_temp_low": {"unit": "°F", "device_class": "temperature", "icon": "mdi:thermometer-low"},
             "forecast_day_desc": {"icon": "mdi:weather-partly-cloudy"},
-            "weather": {"icon": "mdi:weather-partly-cloudy"},
+            "current_conditions": {"icon": "mdi:weather-partly-cloudy"},
             "forecast": {"icon": "mdi:weather-partly-cloudy", "value_template": "{{ value_json[0].condition }}"},
         }
 
@@ -320,6 +321,44 @@ def _parse_lightning_distance(val: str) -> int:
     total_dist = sum(float(s) for s in splits) if spl_cnt > 0 else 0.0
     return int(total_dist / spl_cnt) if spl_cnt > 0 else 0
 
+def _clean_conditions(val: str) -> str:
+    """Clean current conditions string."""
+    return val.strip().title()
+
+
+def wind_cardinal_to_degrees(cardinal: str) -> float:
+    """Convert wind cardinal direction to degrees.
+
+    Args:
+        cardinal (str): Wind direction as a cardinal string (e.g., 'N', 'ESE', 'SW').
+
+    Returns:
+        float: Degrees corresponding to the cardinal direction (0-360).
+
+    """
+    cardinal = cardinal.upper().strip()
+    directions = [
+        "N",
+        "NNE",
+        "NE",
+        "ENE",
+        "E",
+        "ESE",
+        "SE",
+        "SSE",
+        "S",
+        "SSW",
+        "SW",
+        "WSW",
+        "W",
+        "WNW",
+        "NW",
+        "NNW",
+    ]
+    if cardinal in directions:
+        return directions.index(cardinal) * 22.5
+    return 0.0  # Default to North if unknown
+
 
 def main() -> None:  # noqa: C901, PLR0915
     """Scrapes weather data from a Tempest Weather station web page using Selenium and headless Chrome."""
@@ -398,7 +437,7 @@ def main() -> None:  # noqa: C901, PLR0915
         "daily_temp_high": "p.daily-temp-high",  # CSS selector for daily high
         "daily_temp_low": "p.daily-temp-low",  # CSS selector for daily low
         "forecast_day_desc": "p.forecast-day-desc",  # CSS selector for forecast day description
-        # "weather": "#conditions-str",
+        "current_conditions": "#conditions-str",
     }
 
     css_refs.update({f"forecast_hourly_condition_{x}": f"tr.hourly-sky :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
@@ -433,7 +472,8 @@ def main() -> None:  # noqa: C901, PLR0915
         "wind_gusts": lambda val, data=weather_data: _parse_wind_gusts(val, data),
         "lightning_last_distance": _parse_lightning_distance,
         "brightness": _clean_brightness,
-        # "weather": lambda val: val.split(" ")[0].lower(),
+        "current_conditions": _clean_conditions,
+        "forecast_hourly_condition_": _clean_conditions,
         "forecast_hourly_time_": _to_iso_datetime,
     }
 
@@ -468,14 +508,19 @@ def main() -> None:  # noqa: C901, PLR0915
 
                         weather_data[k] = new_val
 
+                if weather_data.get("wind_direction_cardinal"):
+                    # Convert cardinal direction to degrees
+                    weather_data["wind_bearing"] = wind_cardinal_to_degrees(weather_data["wind_direction_cardinal"])
+
                 forecast = [
                     {
-                        "condition": weather_data.get(f"forecast_hourly_condition_{i}"),
+                        "condition": weather_data.get(f"forecast_hourly_condition_{i}").lower(),
                         "datetime": weather_data.get(f"forecast_hourly_time_{i}"),
                         "native_temperature": float(weather_data.get(f"forecast_hourly_temp_{i}")),
                         "precipitation_probability": int(weather_data.get(f"forecast_hourly_precip_{i}")),
                         "native_wind_speed": int(weather_data.get(f"forecast_hourly_wind_{i}")),
-                        "wind_bearing": weather_data.get(f"forecast_hourly_wind_direction_{i}"),
+                        "wind_bearing_cardinal": weather_data.get(f"forecast_hourly_wind_direction_{i}"),
+                        "wind_bearing": wind_cardinal_to_degrees(weather_data.get(f"forecast_hourly_wind_direction_{i}")),
                     }
                     for i in range(1, FORECAST_HOURS + 1)
                 ]
