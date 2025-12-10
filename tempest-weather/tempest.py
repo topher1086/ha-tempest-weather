@@ -572,17 +572,22 @@ def main() -> None:  # noqa: C901, PLR0915
                     # Convert cardinal direction to degrees
                     weather_data["wind_bearing"] = wind_cardinal_to_degrees(weather_data["wind_direction_cardinal"])
 
-                forecast = [
-                    {
-                        "condition": weather_data.get(f"forecast_hourly_condition_{i}"),
-                        "datetime": weather_data.get(f"forecast_hourly_time_{i}"),
-                        "native_temperature": float(weather_data.get(f"forecast_hourly_temp_{i}")),
-                        "precipitation_probability": int(weather_data.get(f"forecast_hourly_precip_{i}")),
-                        "native_wind_speed": int(weather_data.get(f"forecast_hourly_wind_{i}")),
-                        "wind_bearing": wind_cardinal_to_degrees(weather_data.get(f"forecast_hourly_wind_direction_{i}")),
-                    }
-                    for i in range(1, FORECAST_HOURS + 1)
-                ]
+                forecast = []
+                for i in range(1, FORECAST_HOURS + 1):
+                    temp_val = weather_data.get(f"forecast_hourly_temp_{i}")
+                    precip_val = weather_data.get(f"forecast_hourly_precip_{i}")
+                    wind_val = weather_data.get(f"forecast_hourly_wind_{i}")
+
+                    forecast.append(
+                        {
+                            "condition": weather_data.get(f"forecast_hourly_condition_{i}"),
+                            "datetime": weather_data.get(f"forecast_hourly_time_{i}"),
+                            "native_temperature": float(temp_val) if temp_val is not None else None,
+                            "precipitation_probability": int(precip_val) if precip_val is not None else None,
+                            "native_wind_speed": int(wind_val) if wind_val is not None else None,
+                            "wind_bearing": wind_cardinal_to_degrees(weather_data.get(f"forecast_hourly_wind_direction_{i}")),
+                        }
+                    )
                 weather_data["forecast"] = forecast
 
                 # Click the 'Observations' button if present after each loop
