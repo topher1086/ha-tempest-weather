@@ -385,16 +385,18 @@ def _clean_condition(val: str) -> str:
     return found_cond if found_cond else val_clean
 
 
-def wind_cardinal_to_degrees(cardinal: str) -> float:
+def wind_cardinal_to_degrees(cardinal: str | None) -> float | None:
     """Convert wind cardinal direction to degrees.
 
     Args:
-        cardinal (str): Wind direction as a cardinal string (e.g., 'N', 'ESE', 'SW').
+        cardinal (str | None): Wind direction as a cardinal string (e.g., 'N', 'ESE', 'SW'), or None.
 
     Returns:
-        float: Degrees corresponding to the cardinal direction (0-360).
+        float | None: Degrees corresponding to the cardinal direction (0-360), or None if input is None.
 
     """
+    if cardinal is None:
+        return None
     cardinal = cardinal.upper().strip()
     directions = [
         "N",
@@ -577,6 +579,7 @@ def main() -> None:  # noqa: C901, PLR0915
                     temp_val = weather_data.get(f"forecast_hourly_temp_{i}")
                     precip_val = weather_data.get(f"forecast_hourly_precip_{i}")
                     wind_val = weather_data.get(f"forecast_hourly_wind_{i}")
+                    wind_dir_val = weather_data.get(f"forecast_hourly_wind_direction_{i}")
 
                     forecast.append(
                         {
@@ -585,8 +588,8 @@ def main() -> None:  # noqa: C901, PLR0915
                             "native_temperature": float(temp_val) if temp_val is not None else None,
                             "precipitation_probability": int(precip_val) if precip_val is not None else None,
                             "native_wind_speed": int(wind_val) if wind_val is not None else None,
-                            "wind_bearing": wind_cardinal_to_degrees(weather_data.get(f"forecast_hourly_wind_direction_{i}")),
-                        }
+                            "wind_bearing": wind_cardinal_to_degrees(wind_dir_val),
+                        },
                     )
                 weather_data["forecast"] = forecast
 
