@@ -2,11 +2,13 @@ from __future__ import annotations  # noqa: D100, INP001
 
 import json
 import random
+import re
 import sys
 import time
 import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import paho.mqtt.client as mqtt
 import pytz
@@ -20,7 +22,7 @@ in_addon = not __file__.startswith("/workspaces/") and not __file__.startswith(
     "/home/chris/",
 )
 
-settings = {}
+settings: dict[str, Any] = {}
 try:
     with Path("./data/options.json").open() as json_file:
         settings = json.load(json_file)
@@ -28,59 +30,104 @@ except FileNotFoundError:
     with Path("./tempest-weather/config.yaml").open() as yaml_file:
         full_config = yaml.safe_load(yaml_file)
 
-    settings = full_config["options"]
+    settings = full_config.get("options", {})
 
 try:
     with Path("./tempest-weather/test_config.yaml").open() as yaml_file:
         test_config = yaml.safe_load(yaml_file)
-        settings.update(test_config)
+        if test_config:
+            settings.update(test_config)
 except FileNotFoundError:
     test_config = {}
 
 # reset the logging level from DEBUG by default
 logger.remove()
-logger.add(sys.stderr, level=settings["LOGGING_LEVEL"] if in_addon else "DEBUG")
+logger.add(sys.stderr, level=settings.get("LOGGING_LEVEL", "INFO") if in_addon else "DEBUG")
 
 logger.info("Running in add-on" if in_addon else "Running outside of add-on")
 
-STATION_ID = settings.get("WEATHER_STATION_ID")
+
+def slugify(text: str) -> str:
+    """Convert text to a clean slug."""
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    return re.sub(r"[-\s]+", "_", text)
 
 
-# MQTT config (add these to your config.yaml or test_config.yaml as needed)
+def parse_stations(conf: dict[str, Any]) -> list[dict[str, str]]:
+    """Parse configured weather stations.
+
+    Supports:
+    1. WEATHER_STATIONS as list of dicts: [{'id': '171455', 'name': 'Home'}, ...]
+    2. WEATHER_STATIONS as list of strings: ['171455:Home', '123456:Cabin'] or ['171455', '123456']
+    3. WEATHER_STATION_ID as string (single ID, or comma-separated '171455, 123456' / '171455:Home, 123456:Cabin')
+    """
+    stations_raw = conf.get("WEATHER_STATIONS")
+    parsed: list[dict[str, str]] = []
+
+    if stations_raw:
+        if isinstance(stations_raw, list):
+            for idx, item in enumerate(stations_raw):
+                if isinstance(item, dict):
+                    s_id = str(item.get("id", "")).strip()
+                    s_name = str(item.get("name", "")).strip() if item.get("name") else ("Home" if len(stations_raw) == 1 else f"Station {idx+1}")
+                    if s_id:
+                        parsed.append({"id": s_id, "name": s_name})
+                elif isinstance(item, str):
+                    item_str = item.strip()
+                    if ":" in item_str:
+                        s_id, s_name = item_str.split(":", 1)
+                        parsed.append({"id": s_id.strip(), "name": s_name.strip()})
+                    elif item_str:
+                        parsed.append({"id": item_str, "name": "Home" if len(stations_raw) == 1 else f"Station {idx+1}"})
+        elif isinstance(stations_raw, str):
+            parts = [p.strip() for p in stations_raw.split(",") if p.strip()]
+            for idx, part in enumerate(parts):
+                if ":" in part:
+                    s_id, s_name = part.split(":", 1)
+                    parsed.append({"id": s_id.strip(), "name": s_name.strip()})
+                else:
+                    parsed.append({"id": part, "name": "Home" if len(parts) == 1 else f"Station {idx+1}"})
+
+    if not parsed:
+        single_id = conf.get("WEATHER_STATION_ID")
+        if single_id:
+            single_id_str = str(single_id).strip()
+            if "," in single_id_str:
+                parts = [p.strip() for p in single_id_str.split(",") if p.strip()]
+                for idx, part in enumerate(parts):
+                    if ":" in part:
+                        s_id, s_name = part.split(":", 1)
+                        parsed.append({"id": s_id.strip(), "name": s_name.strip()})
+                    else:
+                        parsed.append({"id": part, "name": "Home" if len(parts) == 1 else f"Station {idx+1}"})
+            elif ":" in single_id_str:
+                s_id, s_name = single_id_str.split(":", 1)
+                parsed.append({"id": s_id.strip(), "name": s_name.strip()})
+            else:
+                parsed.append({"id": single_id_str, "name": "Home"})
+
+    for st in parsed:
+        name_slug = slugify(st["name"])
+        st["slug"] = f"tempest_scraper_{name_slug}"
+        st["device_name"] = f"Tempest Weather ({st['name']})"
+
+    return parsed
+
+
+# MQTT config
 MQTT_HOST = settings.get("MQTT_HOST")
 MQTT_PORT = settings.get("MQTT_PORT", 1884)
 MQTT_TRANSPORT = settings.get("MQTT_TRANSPORT", "websockets")
 MQTT_USER = settings.get("MQTT_USER")
 MQTT_PASS = settings.get("MQTT_PASS")
-MQTT_CLIENT_ID = f"tempest_{STATION_ID}"
+MQTT_CLIENT_ID = "ha_tempest_weather_scraper"
 MQTT_BASE = "homeassistant"
 
 FORECAST_HOURS = 12
 NIGHT_LUX_LEVEL = 10
 NIGHT_HOUR_START = 19
 DAY_HOUR_START = 6
-
-# Get the path of the current working directory
-# import os
-
-# current_path = os.getcwd()
-# print(f"Listing for: {current_path}\n")
-
-# # os.listdir() returns a list of strings (filenames)
-# try:
-#     for item in os.listdir():
-#         print(item)
-# except FileNotFoundError:
-#     print(f"Error: The directory '{current_path}' was not found.")
-
-# dirs_to_list = ["./chromedriver-linux64", "./chrome-headless-shell-linux64"]
-# for directory in dirs_to_list:
-#     print(f"Listing for: {os.path.abspath(directory)}\n")
-#     try:
-#         print("\n".join(os.listdir(directory)))
-#     except FileNotFoundError:
-#         print(f"Error: The directory '{directory}' was not found.")
-#     print("-" * 20)
 
 if in_addon:
     chromedriver_path = "/usr/bin/chromedriver"
@@ -101,16 +148,14 @@ class MQTTPublisher:
         password (str | None): MQTT password.
         client_id (str): MQTT client ID.
         base (str): MQTT topic base.
-        station_id (str): Weather station ID.
         client (mqtt.Client | None): The MQTT client instance.
-        last_values (dict): Last published values for each sensor.
+        last_values (dict): Last published values for each (station_slug, sensor).
+        sensors_configured (set): Set of configured (station_slug, sensor) tuples.
         sensor_meta (dict): Metadata for each sensor (unit, device_class, icon).
 
     """
 
-    def __init__(
-        self,
-    ) -> None:
+    def __init__(self) -> None:
         """Initialize the MQTTPublisher with connection and sensor info."""
         self.host = MQTT_HOST
         self.port = MQTT_PORT
@@ -119,12 +164,11 @@ class MQTTPublisher:
         self.password = MQTT_PASS
         self.client_id = MQTT_CLIENT_ID
         self.base = MQTT_BASE
-        self.station_id = STATION_ID
         self.client: mqtt.Client | None = None
-        self.last_values: dict[str, str | None] = {}
-        self.sensors_configured: set[str] = set()
-        self.update_count: int = 0
-        self.sensor_meta: dict[str, dict[str, str]] = {
+        self.last_values: dict[tuple[str, str], Any] = {}
+        self.sensors_configured: set[tuple[str, str]] = set()
+        self.update_counts: dict[str, int] = {}
+        self.sensor_meta: dict[str, dict[str, Any]] = {
             "temperature": {"unit": "°F", "device_class": "temperature"},
             "humidity": {"unit": "%", "device_class": "humidity"},
             "feels_like": {"unit": "°F", "device_class": "temperature"},
@@ -170,37 +214,44 @@ class MQTTPublisher:
             logger.warning(f"Could not connect to MQTT broker: {e}")
             self.client = None
 
-    def publish_sensor(self, sensor: str, value: str | None, force: bool = False) -> None:  # noqa: FBT001, FBT002
+    def publish_sensor(self, station: dict[str, str], sensor: str, value: Any, force: bool = False) -> None:  # noqa: FBT001, FBT002
         """Publish a single sensor value to MQTT if it has changed since the last publish.
 
         Args:
+            station (dict): Station metadata including slug, id, device_name.
             sensor (str): The sensor name.
-            value (str | None): The sensor value.
+            value (Any): The sensor value.
             force (bool): Whether to force publish the value.
 
         """
         if not self.client:
             return
+
+        station_slug = station["slug"]
+        station_device_name = station["device_name"]
+        cache_key = (station_slug, sensor)
+
         # Only publish if value changed
-        if self.last_values.get(sensor) == value and not force:
+        if self.last_values.get(cache_key) == value and not force:
             return
-        self.last_values[sensor] = value
-        object_id = f"tempest_{sensor}"
-        unique_id = f"tempest_{sensor}_{self.station_id}"
+        self.last_values[cache_key] = value
+
+        object_id = f"{station_slug}_{sensor}"
+        unique_id = f"{station_slug}_{sensor}"
         config_topic = f"{self.base}/sensor/{object_id}/config"
         state_topic = f"{self.base}/sensor/{object_id}/state"
 
-        if sensor not in self.sensors_configured:
+        if cache_key not in self.sensors_configured:
             meta = self.sensor_meta.get(sensor, {})
-            config_payload = {
+            config_payload: dict[str, Any] = {
                 "name": f"{sensor.replace('_', ' ').title()}",
                 "state_topic": state_topic,
                 "unique_id": unique_id,
                 "device": {
-                    "identifiers": [f"tempest_{self.station_id}"],
-                    "manufacturer": "WeatherFlow",
-                    "model": "Tempest",
-                    "name": f"Tempest Station {self.station_id}",
+                    "identifiers": [station_slug],
+                    "manufacturer": "WeatherFlow (Scraper)",
+                    "model": "Tempest Web Scraper",
+                    "name": station_device_name,
                 },
             }
             if meta.get("unit"):
@@ -209,7 +260,7 @@ class MQTTPublisher:
                 config_payload["device_class"] = meta["device_class"]
             if meta.get("icon"):
                 config_payload["icon"] = meta["icon"]
-            if meta.get("suggested_display_precision"):
+            if meta.get("suggested_display_precision") is not None:
                 config_payload["suggested_display_precision"] = meta["suggested_display_precision"]
             if meta.get("value_template"):
                 config_payload["value_template"] = meta["value_template"]
@@ -218,19 +269,17 @@ class MQTTPublisher:
                     config_payload["json_attributes_template"] = "{{ {'forecast': value_json} | tojson }}"
 
             self.client.publish(config_topic, json.dumps(config_payload), retain=True)
+            self.sensors_configured.add(cache_key)
+            logger.info(f"Published MQTT config for {station['name']} - {sensor}")
 
-            self.sensors_configured.add(sensor)
-            logger.info(f"Published MQTT config for {sensor}")
-
-        # self.client.publish(state_topic, str(value) if value is not None else "", retain=True)
         val = json.dumps(value) if isinstance(value, list | dict) else str(value) if value is not None else ""
-
         self.client.publish(state_topic, val, retain=True)
 
-    def publish_weather(self, weather_data: dict[str, str | None]) -> None:
-        """Publish all weather data to MQTT, only sending values that have changed.
+    def publish_weather(self, station: dict[str, str], weather_data: dict[str, Any]) -> None:
+        """Publish all weather data for a station to MQTT, only sending changed values.
 
         Args:
+            station (dict): Station metadata.
             weather_data (dict): Dictionary of sensor names to values.
 
         """
@@ -239,13 +288,14 @@ class MQTTPublisher:
             self._setup_client()
             return
 
-        self.update_count += 1
-        force = self.update_count % 60 == 0
+        station_slug = station["slug"]
+        self.update_counts[station_slug] = self.update_counts.get(station_slug, 0) + 1
+        force = self.update_counts[station_slug] % 60 == 0
         if force:
-            logger.info("Forcing MQTT publish for all sensors.")
+            logger.info(f"Forcing MQTT publish for all sensors ({station['name']}).")
         for k, v in weather_data.items():
-            logger.info(f"{k.capitalize()}: {v}")
-            self.publish_sensor(k, v, force=force)
+            logger.info(f"[{station['name']}] {k.capitalize()}: {v}")
+            self.publish_sensor(station, k, v, force=force)
 
     def disconnect(self) -> None:
         """Disconnect from the MQTT broker and stop the client loop."""
@@ -290,24 +340,19 @@ def _to_iso_datetime(time_str: str, weather_data: dict) -> str:
     tz = pytz.timezone(weather_data["station_timezone"]) if weather_data.get("station_timezone") else pytz.timezone("America/Los_Angeles")
 
     now = datetime.now(tz)
-    # Special case for "Now"
     if time_str.lower() == "now":
         return now.isoformat()
 
-    # Parse time like "2 pm"
     try:
         hour_time = datetime.strptime(time_str, "%I %p")
-        # Create a datetime object for today with the parsed time
         forecast_dt = now.replace(hour=hour_time.hour, minute=0, second=0, microsecond=0)
-
-        # If the forecast time is in the past, it must be for tomorrow
         if forecast_dt < now:
             forecast_dt += timedelta(days=1)
 
         return forecast_dt.isoformat()
     except ValueError:
         logger.warning(f"Could not parse time: {time_str}")
-        return time_str  # Return original if parsing fails
+        return time_str
 
 
 def _parse_wind_gusts(val: str, weather_data: dict) -> None:
@@ -354,7 +399,6 @@ def _clean_condition(val: str) -> str:
 
     val_clean = val.strip().lower()
 
-    # Mapping for special cases
     special_cases = {
         "thunderstorm": "lightning-rainy",
         "partlycloudy": "partlycloudy",
@@ -363,14 +407,12 @@ def _clean_condition(val: str) -> str:
         "clear": "sunny",
     }
 
-    # Check for direct match
     if val_clean in cond_list:
         return val_clean
 
     if val_clean in special_cases:
         return special_cases[val_clean]
 
-    # Check for special cases
     if "thunderstorm" in val_clean:
         return special_cases["thunderstorm"]
     if "partly" in val_clean and "cloudy" in val_clean:
@@ -380,7 +422,6 @@ def _clean_condition(val: str) -> str:
     if "clear" in val_clean and "day" in val_clean:
         return special_cases["sunny"]
 
-    # Check if any condition in cond_list is a substring
     found_cond = next((c for c in cond_list if c in val_clean), None)
     return found_cond if found_cond else val_clean
 
@@ -418,11 +459,33 @@ def wind_cardinal_to_degrees(cardinal: str | None) -> float | None:
     ]
     if cardinal in directions:
         return directions.index(cardinal) * 22.5
-    return 0.0  # Default to North if unknown
+    return 0.0
 
 
 def main() -> None:  # noqa: C901, PLR0915
-    """Scrapes weather data from a Tempest Weather station web page using Selenium and headless Chrome."""
+    """Scrapes weather data from configured Tempest Weather stations using Selenium and headless Chrome."""
+    stations = parse_stations(settings)
+    if not stations:
+        logger.error("No weather stations configured! Set WEATHER_STATIONS or WEATHER_STATION_ID.")
+        return
+
+    logger.info(f"Configured stations: {[s['name'] + ' (ID: ' + s['id'] + ')' for s in stations]}")
+
+    service = ChromeService(chromedriver_path)
+    chrome_options = webdriver.ChromeOptions()
+    chrome_options.binary_location = chrome_shell_binary_location
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    )
+
+    driver = webdriver.Chrome(
+        service=service,
+        options=chrome_options,
+    )
 
     def safe_text(selector: str) -> str | None:
         try:
@@ -430,18 +493,13 @@ def main() -> None:  # noqa: C901, PLR0915
         except Exception:
             return None
 
-    def get_aria_label_nested(selector: str) -> str | None:
-        elements = driver.find_elements(By.CSS_SELECTOR, selector)
-
-        return get_aria_nested(elements)
-
     def get_aria_nested(element_list: list) -> str | None:
         for element in element_list:
             try:
                 a_label = element.accessible_name
                 if isinstance(a_label, str) and len(a_label) > 0:
                     return a_label
-            except AttributeError:  # noqa: PERF203
+            except AttributeError:
                 a_label = None
 
         for element in element_list:
@@ -451,30 +509,21 @@ def main() -> None:  # noqa: C901, PLR0915
                 return a_label
         return None
 
-    # time.sleep(600)
+    def get_aria_label_nested(selector: str) -> str | None:
+        elements = driver.find_elements(By.CSS_SELECTOR, selector)
+        return get_aria_nested(elements)
 
-    url = f"https://tempestwx.com/station/{STATION_ID}"
-    service = ChromeService(chromedriver_path)
-    chrome_options = webdriver.ChromeOptions()
-
-    # Set the binary location (your code already does this correctly)
-    chrome_options.binary_location = chrome_shell_binary_location
-
-    # --- ADD THESE ARGUMENTS ---
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")  # Essential for running as root in Docker
-    chrome_options.add_argument("--disable-dev-shm-usage")  # Overcomes limited resource problems
-    chrome_options.add_argument("--disable-gpu")  # Applicable for headless environments
-    chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
-    )
-    # ---------------------------
-
-    driver = webdriver.Chrome(
-        service=service,
-        options=chrome_options,
-    )
-    driver.get(url)
+    # Open dedicated tab for each station
+    for idx, station in enumerate(stations):
+        url = f"https://tempestwx.com/station/{station['id']}"
+        logger.info(f"Opening tab for station {station['name']} ({url})")
+        if idx == 0:
+            driver.get(url)
+            station["window_handle"] = driver.current_window_handle
+        else:
+            driver.switch_to.new_window("tab")
+            driver.get(url)
+            station["window_handle"] = driver.current_window_handle
 
     css_refs = {
         "station_timezone": "#station-timezone",
@@ -495,26 +544,19 @@ def main() -> None:  # noqa: C901, PLR0915
         "precipitation_yesterday": "[data-param='param-precip_accumm_local_yesterday_final_display_with_units']",
         "uv": "[data-param='param-uv_with_index']",
         "brightness": "[data-param='param-lux_display_with_units']",
-        "daily_precip_chance": "p.daily-precip-chance",  # CSS selector for daily precip chance
-        "daily_temp_high": "p.daily-temp-high",  # CSS selector for daily high
-        "daily_temp_low": "p.daily-temp-low",  # CSS selector for daily low
-        "forecast_day_desc": "p.forecast-day-desc",  # CSS selector for forecast day description
+        "daily_precip_chance": "p.daily-precip-chance",
+        "daily_temp_high": "p.daily-temp-high",
+        "daily_temp_low": "p.daily-temp-low",
+        "forecast_day_desc": "p.forecast-day-desc",
         "current_conditions": "#conditions-str",
     }
 
     css_refs.update({f"forecast_hourly_condition_{x}": f"tr.hourly-sky :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
-
     css_refs.update({f"forecast_hourly_time_{x}": f"tr.hour :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
-
     css_refs.update({f"forecast_hourly_temp_{x}": f"tr.hourly-temp :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
-
     css_refs.update({f"forecast_hourly_precip_{x}": f"tr.hourly-precip :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
-
     css_refs.update({f"forecast_hourly_wind_{x}": f"tr.hourly-wind :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
-
     css_refs.update({f"forecast_hourly_wind_direction_{x}": f"tr.hourly-wind :nth-child({x})" for x in range(1, FORECAST_HOURS + 1)})
-
-    weather_data = dict.fromkeys(css_refs.keys())
 
     cleaning_rules = {
         "temperature": _clean_degrees,
@@ -531,18 +573,15 @@ def main() -> None:  # noqa: C901, PLR0915
         "precipitation_rate": _clean_precip_rate,
         "pressure_trend": _clean_precip_rate,
         "forecast_hourly_wind_direction_": _clean_wind_direction,
-        "wind_gusts": lambda val, data=weather_data: _parse_wind_gusts(val, data),
         "lightning_last_distance": _parse_lightning_distance,
         "brightness": _clean_brightness,
         "current_conditions": _clean_condition,
         "forecast_hourly_condition_": _clean_condition,
-        "forecast_hourly_time_": lambda val, data=weather_data: _to_iso_datetime(val, data),
     }
 
     sleep_time = 15
     loops = 3600 / sleep_time
 
-    # Initialize persistent MQTT publisher
     mqtt_publisher = MQTTPublisher()
 
     try:
@@ -550,58 +589,63 @@ def main() -> None:  # noqa: C901, PLR0915
             try:
                 time.sleep(sleep_time)
 
-                for k, v in css_refs.items():
-                    new_val = (
-                        get_aria_label_nested(v)
-                        if k.startswith(("forecast_hourly_wind_direction_", "forecast_hourly_condition_"))
-                        else driver.find_element(By.CSS_SELECTOR, v).get_attribute("aria-label")
-                        if k == "weather"
-                        else safe_text(v)
-                    )
+                for station in stations:
+                    driver.switch_to.window(station["window_handle"])
+                    weather_data = dict.fromkeys(css_refs.keys())
 
-                    if new_val:
-                        # Find and apply the correct cleaning rule
-                        rule_key = next((rule for rule in cleaning_rules if k.startswith(rule)), None)
-                        if rule_key:
-                            if rule_key in ["wind_gusts"]:
-                                cleaning_rules[rule_key](new_val)
+                    for k, v in css_refs.items():
+                        new_val = (
+                            get_aria_label_nested(v)
+                            if k.startswith(("forecast_hourly_wind_direction_", "forecast_hourly_condition_"))
+                            else driver.find_element(By.CSS_SELECTOR, v).get_attribute("aria-label")
+                            if k == "weather"
+                            else safe_text(v)
+                        )
+
+                        if new_val:
+                            if k == "wind_gusts":
+                                _parse_wind_gusts(new_val, weather_data)
                                 continue
-                            new_val = cleaning_rules[rule_key](new_val)
+                            if k.startswith("forecast_hourly_time_"):
+                                new_val = _to_iso_datetime(new_val, weather_data)
+                            else:
+                                rule_key = next((rule for rule in cleaning_rules if k.startswith(rule)), None)
+                                if rule_key:
+                                    new_val = cleaning_rules[rule_key](new_val)
 
-                        weather_data[k] = new_val
+                            weather_data[k] = new_val
 
-                if weather_data.get("wind_direction_cardinal"):
-                    # Convert cardinal direction to degrees
-                    weather_data["wind_bearing"] = wind_cardinal_to_degrees(weather_data["wind_direction_cardinal"])
+                    if weather_data.get("wind_direction_cardinal"):
+                        weather_data["wind_bearing"] = wind_cardinal_to_degrees(weather_data["wind_direction_cardinal"])
 
-                forecast = []
-                for i in range(1, FORECAST_HOURS + 1):
-                    temp_val = weather_data.get(f"forecast_hourly_temp_{i}")
-                    precip_val = weather_data.get(f"forecast_hourly_precip_{i}")
-                    wind_val = weather_data.get(f"forecast_hourly_wind_{i}")
-                    wind_dir_val = weather_data.get(f"forecast_hourly_wind_direction_{i}")
+                    forecast = []
+                    for i in range(1, FORECAST_HOURS + 1):
+                        temp_val = weather_data.get(f"forecast_hourly_temp_{i}")
+                        precip_val = weather_data.get(f"forecast_hourly_precip_{i}")
+                        wind_val = weather_data.get(f"forecast_hourly_wind_{i}")
+                        wind_dir_val = weather_data.get(f"forecast_hourly_wind_direction_{i}")
 
-                    forecast.append(
-                        {
-                            "condition": weather_data.get(f"forecast_hourly_condition_{i}"),
-                            "datetime": weather_data.get(f"forecast_hourly_time_{i}"),
-                            "native_temperature": float(temp_val) if temp_val is not None else None,
-                            "precipitation_probability": int(precip_val) if precip_val is not None else None,
-                            "native_wind_speed": int(wind_val) if wind_val is not None else None,
-                            "wind_bearing": wind_cardinal_to_degrees(wind_dir_val),
-                        },
-                    )
-                weather_data["forecast"] = forecast
+                        forecast.append(
+                            {
+                                "condition": weather_data.get(f"forecast_hourly_condition_{i}"),
+                                "datetime": weather_data.get(f"forecast_hourly_time_{i}"),
+                                "native_temperature": float(temp_val) if temp_val is not None else None,
+                                "precipitation_probability": int(precip_val) if precip_val is not None else None,
+                                "native_wind_speed": int(wind_val) if wind_val is not None else None,
+                                "wind_bearing": wind_cardinal_to_degrees(wind_dir_val),
+                            },
+                        )
+                    weather_data["forecast"] = forecast
 
-                # Click the 'Observations' button if present after each loop
-                try:
-                    view_btn = driver.find_element(By.ID, "view-btn")
-                    view_btn.click()
-                    logger.debug("Clicked the 'Observations' button.")
-                except Exception as e:
-                    logger.warning(f"Could not click 'Observations' button: {e}")
+                    # Click the 'Observations' button if present
+                    try:
+                        view_btn = driver.find_element(By.ID, "view-btn")
+                        view_btn.click()
+                        logger.debug(f"Clicked the 'Observations' button for {station['name']}.")
+                    except Exception as e:
+                        logger.debug(f"Observations button not clickable for {station['name']}: {e}")
 
-                mqtt_publisher.publish_weather(weather_data)
+                    mqtt_publisher.publish_weather(station, weather_data)
 
                 logger.info("*" * 40)
 
@@ -609,7 +653,7 @@ def main() -> None:  # noqa: C901, PLR0915
                 time.sleep(random.randint(1, sleep_time))  # noqa: S311
 
             except Exception as e:
-                logger.error(f"Error occurred: {e}")
+                logger.error(f"Error occurred during scraping loop: {e}")
                 logger.error(traceback.format_exc())
     finally:
         driver.quit()
