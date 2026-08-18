@@ -224,14 +224,15 @@ class MQTTPublisher:
             force (bool): Whether to force publish the value.
 
         """
-        if not self.client:
+        # Never publish None or overwrite valid HA sensor data with unknown
+        if not self.client or value is None:
             return
 
         station_slug = station["slug"]
         station_device_name = station["device_name"]
         cache_key = (station_slug, sensor)
 
-        # Only publish if value changed
+        # Only publish if value changed (or forced)
         if self.last_values.get(cache_key) == value and not force:
             return
         self.last_values[cache_key] = value
@@ -272,11 +273,11 @@ class MQTTPublisher:
             self.sensors_configured.add(cache_key)
             logger.info(f"Published MQTT config for {station['name']} - {sensor}")
 
-        val = json.dumps(value) if isinstance(value, list | dict) else str(value) if value is not None else ""
+        val = json.dumps(value) if isinstance(value, list | dict) else str(value)
         self.client.publish(state_topic, val, retain=True)
 
     def publish_weather(self, station: dict[str, str], weather_data: dict[str, Any]) -> None:
-        """Publish all weather data for a station to MQTT, only sending changed values.
+        """Publish all weather data for a station to MQTT, only sending non-None changed values.
 
         Args:
             station (dict): Station metadata.
@@ -294,8 +295,11 @@ class MQTTPublisher:
         if force:
             logger.info(f"Forcing MQTT publish for all sensors ({station['name']}).")
         for k, v in weather_data.items():
-            logger.info(f"[{station['name']}] {k.capitalize()}: {v}")
-            self.publish_sensor(station, k, v, force=force)
+            if v is not None:
+                logger.info(f"[{station['name']}] {k.capitalize()}: {v}")
+                self.publish_sensor(station, k, v, force=force)
+            else:
+                logger.debug(f"[{station['name']}] {k.capitalize()}: None (skipping publish)")
 
     def disconnect(self) -> None:
         """Disconnect from the MQTT broker and stop the client loop."""
@@ -357,6 +361,8 @@ def _to_iso_datetime(time_str: str, weather_data: dict) -> str:
 
 def _parse_wind_gusts(val: str, weather_data: dict) -> None:
     """Parse wind gust data into low and high values."""
+    if not val or val.strip() == "---":
+        return
     n_val = val.replace(" mph", "").strip().replace(" ", "")
     splits = n_val.split("-")
     low_val = splits[0]
@@ -365,13 +371,18 @@ def _parse_wind_gusts(val: str, weather_data: dict) -> None:
     weather_data["wind_gust_high"] = high_val
 
 
-def _parse_lightning_distance(val: str) -> int:
+def _parse_lightning_distance(val: str) -> int | None:
     """Parse lightning distance, averaging if a range is given."""
+    if not val or str(val).strip() in ["---", "None"]:
+        return None
     new_val = str(val).replace(" mi", "").strip().replace(" ", "")
     splits = new_val.split("-")
-    spl_cnt = len(splits)
-    total_dist = sum(float(s) for s in splits) if spl_cnt > 0 else 0.0
-    return int(total_dist / spl_cnt) if spl_cnt > 0 else 0
+    try:
+        total_dist = sum(float(s) for s in splits)
+        spl_cnt = len(splits)
+        return int(total_dist / spl_cnt) if spl_cnt > 0 else None
+    except ValueError:
+        return None
 
 
 def _clean_condition(val: str) -> str:
@@ -436,7 +447,7 @@ def wind_cardinal_to_degrees(cardinal: str | None) -> float | None:
         float | None: Degrees corresponding to the cardinal direction (0-360), or None if input is None.
 
     """
-    if cardinal is None:
+    if cardinal is None or cardinal.strip() == "---":
         return None
     cardinal = cardinal.upper().strip()
     directions = [
@@ -459,7 +470,7 @@ def wind_cardinal_to_degrees(cardinal: str | None) -> float | None:
     ]
     if cardinal in directions:
         return directions.index(cardinal) * 22.5
-    return 0.0
+    return None
 
 
 def main() -> None:  # noqa: C901, PLR0915
@@ -615,7 +626,7 @@ def main() -> None:  # noqa: C901, PLR0915
 
                             weather_data[k] = new_val
 
-                    if weather_data.get("wind_direction_cardinal"):
+                    if weather_data.get("wind_direction_cardinal") and weather_data["wind_direction_cardinal"] != "---":
                         weather_data["wind_bearing"] = wind_cardinal_to_degrees(weather_data["wind_direction_cardinal"])
 
                     forecast = []
@@ -632,10 +643,12 @@ def main() -> None:  # noqa: C901, PLR0915
                                 "native_temperature": float(temp_val) if temp_val is not None else None,
                                 "precipitation_probability": int(precip_val) if precip_val is not None else None,
                                 "native_wind_speed": int(wind_val) if wind_val is not None else None,
-                                "wind_bearing": wind_cardinal_to_degrees(wind_dir_val),
+                                "wind_bearing": wind_cardinal_to_degrees(wind_dir_val) if wind_dir_val and wind_dir_val != "---" else None,
                             },
                         )
-                    weather_data["forecast"] = forecast
+
+                    has_valid_forecast = any(f.get("condition") is not None or f.get("native_temperature") is not None for f in forecast)
+                    weather_data["forecast"] = forecast if has_valid_forecast else None
 
                     # Click the 'Observations' button if present
                     try:
