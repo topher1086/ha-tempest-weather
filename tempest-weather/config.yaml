@@ -1,15 +1,12 @@
 name: "Tempest Weather Scraper"
 description: "Scrapes weather data from Tempest webpage"
-version: "1.2.0"
+version: "1.2.1"
 slug: "tempest_weather_scraper"
 url: "https://github.com/topher1086/ha-tempest-weather"
 init: false
 arch:
   - aarch64
   - amd64
-  - armhf
-  - armv7
-  - i386
 options:
   WEATHER_STATION_ID: null
   WEATHER_STATIONS: []
